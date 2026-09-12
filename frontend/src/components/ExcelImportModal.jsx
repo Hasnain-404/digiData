@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL
   ? `${import.meta.env.VITE_BACKEND_URL}/api/v1`
-  : '/api/v1';
+  : 'https://digidata.onrender.com/api/v1';
 
 // Helper to normalize dates from Excel (handles JS Date, serial numbers, strings like 01.03.2023, 01-03-2023, 2026-08-31)
 function parseExcelDate(val) {
@@ -353,8 +353,8 @@ const ExcelImportModal = ({ isOpen, onClose, onSuccess }) => {
       const resData = await response.json();
 
       if (resData.success) {
-        const inserted  = resData.inserted ?? 0;
-        const skipped   = resData.skipped  ?? 0;
+        const inserted = resData.inserted ?? 0;
+        const skipped = resData.skipped ?? 0;
 
         if (resData.duplicates && resData.duplicates.length > 0) {
           console.log('📋 Skipped duplicate trades report:', resData.duplicates);
@@ -399,9 +399,9 @@ const ExcelImportModal = ({ isOpen, onClose, onSuccess }) => {
       const response = await fetch(`${API_BASE}/trades/export`);
       if (!response.ok) throw new Error('Export failed');
       const blob = await response.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
       a.download = 'Trading_Journal_Export.xlsx';
       a.click();
       URL.revokeObjectURL(url);
@@ -496,8 +496,8 @@ const ExcelImportModal = ({ isOpen, onClose, onSuccess }) => {
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-3 ${dragActive
-                  ? 'border-emerald-500 bg-emerald-500/10'
-                  : 'border-slate-700 bg-slate-900/40 hover:border-slate-600 hover:bg-slate-900/60'
+                ? 'border-emerald-500 bg-emerald-500/10'
+                : 'border-slate-700 bg-slate-900/40 hover:border-slate-600 hover:bg-slate-900/60'
                 }`}
             >
               <input
@@ -644,9 +644,8 @@ const ExcelImportModal = ({ isOpen, onClose, onSuccess }) => {
                             </span>
                           )}
                           {dup.result && (
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                              dup.result === 'TP' ? 'badge-tp' : dup.result === 'SL' ? 'badge-sl' : 'badge-be'
-                            }`}>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${dup.result === 'TP' ? 'badge-tp' : dup.result === 'SL' ? 'badge-sl' : 'badge-be'
+                              }`}>
                               {dup.result}
                             </span>
                           )}

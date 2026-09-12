@@ -3,7 +3,7 @@ import { useLiveMode, DUMMY_MONTHLY_RETURNS } from '../context/LiveModeContext';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL
   ? `${import.meta.env.VITE_BACKEND_URL}/api/v1`
-  : '/api/v1';
+  : 'https://digidata.onrender.com/api/v1';
 
 const MONTH_HEADERS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -59,8 +59,8 @@ const MonthlyReturnsMatrix = () => {
               key={mode}
               onClick={() => setViewMode(mode)}
               className={`px-3 py-1 rounded-lg transition-all ${viewMode === mode
-                  ? 'bg-cyan-500 text-slate-950 font-bold'
-                  : 'text-slate-400 hover:text-white'
+                ? 'bg-cyan-500 text-slate-950 font-bold'
+                : 'text-slate-400 hover:text-white'
                 }`}
             >
               {mode}

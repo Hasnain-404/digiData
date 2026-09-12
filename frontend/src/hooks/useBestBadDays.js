@@ -4,7 +4,7 @@ import { useLiveMode, DUMMY_BEST_BAD_DAYS } from '../context/LiveModeContext';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL
   ? `${import.meta.env.VITE_BACKEND_URL}/api/v1`
-  : '/api/v1';
+  : 'https://digidata.onrender.com/api/v1';
 
 export function useBestBadDays() {
   const { isLiveMode } = useLiveMode() || { isLiveMode: false };

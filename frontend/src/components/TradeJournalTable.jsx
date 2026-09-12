@@ -46,7 +46,7 @@ const formatJournalDate = (dateVal) => {
 const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
   const API_BASE = import.meta.env.VITE_BACKEND_URL
     ? `${import.meta.env.VITE_BACKEND_URL}/api/v1`
-    : '/api/v1';
+    : 'https://digidata.onrender.com/api/v1';
   const {
     trades, pagination, loading, error,
     page, setPage, filters, setFilters,

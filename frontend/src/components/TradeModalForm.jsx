@@ -4,7 +4,7 @@ import { DUMMY_TRADES, DUMMY_KPIS } from '../context/LiveModeContext';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL
   ? `${import.meta.env.VITE_BACKEND_URL}/api/v1`
-  : '/api/v1';
+  : 'https://digidata.onrender.com/api/v1';
 
 // ── Session detection (mirrors backend logic) ─────────────────────────────────
 function detectSession(timeStr) {
@@ -126,7 +126,7 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
 
   // Auto-calculate Risk $ — only write to form if user hasn't manually overridden it
   useEffect(() => {
-    const bal  = parseFloat(form.accountBalance);
+    const bal = parseFloat(form.accountBalance);
     const risk = parseFloat(form.riskPercent);
     if (!isNaN(bal) && !isNaN(risk) && bal > 0 && risk > 0) {
       const calc = ((bal * risk) / 100).toFixed(2);
@@ -140,7 +140,7 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
         setForm((f) => ({ ...f, riskDollar: '' }));
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.accountBalance, form.riskPercent, riskDollarManual]);
 
   // Escape key
@@ -171,10 +171,10 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          profitR:        parseFloat(form.profitR),
-          riskPercent:    parseFloat(form.riskPercent),
+          profitR: parseFloat(form.profitR),
+          riskPercent: parseFloat(form.riskPercent),
           accountBalance: parseFloat(form.accountBalance),
-          riskDollar:     form.riskDollar !== '' ? parseFloat(form.riskDollar) : undefined,
+          riskDollar: form.riskDollar !== '' ? parseFloat(form.riskDollar) : undefined,
         }),
       });
       const data = await res.json();
@@ -332,11 +332,10 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
                   setRiskDollarManual(val !== '');
                   setForm((f) => ({ ...f, riskDollar: val }));
                 }}
-                className={`h-9 px-3 rounded-lg bg-slate-800/80 border text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all input-glow ${
-                  riskDollarManual
+                className={`h-9 px-3 rounded-lg bg-slate-800/80 border text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all input-glow ${riskDollarManual
                     ? 'border-amber-500/60 focus:border-amber-400'
                     : 'border-slate-700 focus:border-blue-500'
-                }`}
+                  }`}
               />
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-const SSE_URL = 'http://localhost:5000/api/v1/trades/stream';
+const SSE_URL = `${import.meta.env.VITE_BACKEND_URL || 'https://digidata.onrender.com'}/api/v1/trades/stream`;
 
 /**
  * useTradeSync – subscribes to the backend SSE stream and calls
