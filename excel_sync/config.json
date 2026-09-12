@@ -1,0 +1,6 @@
+{
+  "excel_file_path": "D:\\CODS\\Backtesting Dashboard\\Trading_Journal.xlsx",
+  "backend_url": "http://localhost:5000/api/v1",
+  "poll_interval_seconds": 5,
+  "sheet_name": null
+}

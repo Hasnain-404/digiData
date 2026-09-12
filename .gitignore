@@ -1,0 +1,27 @@
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+
+# Local trading data
+Trading_Journal.xlsx
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node dependencies and build output
+node_modules/
+dist/
+dist-ssr/
+
+# Logs and local editor files
+*.log
+.vscode/
+.idea/
+*.local
+
+# Runtime-generated sync state
+excel_sync/synced_hashes.json
