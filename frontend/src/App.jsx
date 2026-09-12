@@ -15,7 +15,6 @@ import NotebookView from './components/NotebookView';
 import BacktestView from './components/BacktestView';
 import DayBreakdownTable from './components/DayBreakdownTable';
 
-import { LiveModeProvider } from './context/LiveModeContext';
 
 const SectionHeader = ({ title, subtitle, icon }) => (
   <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-800/40">
@@ -189,24 +188,6 @@ const AppContent = () => {
         </main>
       </div>
 
-      {/* ── Floating New Journal Button (Mobile FAB) ──────────────────────── */}
-      <div className="fixed bottom-6 right-6 md:hidden flex flex-col gap-3 z-20">
-        <button
-          onClick={() => setIsExcelModalOpen(true)}
-          className="w-12 h-12 rounded-full bg-emerald-600 text-white shadow-xl flex items-center justify-center text-xl active:scale-95 transition-transform"
-          title="Import Excel"
-        >
-          <i className="ri-file-excel-2-line" />
-        </button>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="w-14 h-14 rounded-full bg-cyan-500 text-slate-950 shadow-2xl shadow-cyan-500/50 flex items-center justify-center text-2xl active:scale-95 transition-transform"
-          title="New Journal"
-        >
-          <i className="ri-add-line" />
-        </button>
-      </div>
-
       {/* ── Trade Entry Modal ────────────────────────────────────────────── */}
       <TradeModalForm
         isOpen={isModalOpen}
@@ -224,10 +205,6 @@ const AppContent = () => {
   );
 };
 
-const App = () => (
-  <LiveModeProvider>
-    <AppContent />
-  </LiveModeProvider>
-);
+const App = () => <AppContent />;
 
 export default App;

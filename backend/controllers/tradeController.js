@@ -5,7 +5,7 @@ import { execFile } from 'child_process';
 import Trade, { detectSession } from '../models/Trade.js';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
+const __dirname = path.dirname(__filename);
 
 // ─── Excel writer helper script path ─────────────────────────────────────────
 const EXCEL_WRITER_SCRIPT = path.resolve(__dirname, '../../excel_sync/excel_writer.py');
@@ -23,7 +23,7 @@ function runExcelWriter(action, trade) {
     try {
       if (!fs.existsSync(EXCEL_WRITER_SCRIPT)) {
         console.warn(`⚠️ Excel writer script not found: ${EXCEL_WRITER_SCRIPT}`);
-        return resolve(null);
+        return resolve({ success: false, message: 'Excel writer script not found' });
       }
 
       const tradePayload = JSON.stringify({
@@ -44,7 +44,7 @@ function runExcelWriter(action, trade) {
       execFile('python', [EXCEL_WRITER_SCRIPT, action, tradePayload], (error, stdout, stderr) => {
         if (error) {
           console.warn(`⚠️ Excel writer (${action}) error:`, stderr || error.message);
-          resolve(null);
+          resolve({ success: false, message: (stderr || error.message).trim() });
         } else {
           console.log(`✅ Excel writer (${action}) success:`, stdout.trim());
           let tradeNum = null;
@@ -57,7 +57,7 @@ function runExcelWriter(action, trade) {
       });
     } catch (e) {
       console.warn(`⚠️ Excel writer execution error:`, e.message);
-      resolve(null);
+      resolve({ success: false, message: e.message });
     }
   });
 }
@@ -95,10 +95,11 @@ export const notifyClients = (eventData = { type: 'TRADE_UPDATE' }) => {
 export const createTrade = async (req, res) => {
   try {
     const trade = new Trade(req.body);
+    let writerRes = null;
 
     // ── Write back to Excel automatically ────────────────────────────────────
     try {
-      const writerRes = await runExcelWriter('append', trade);
+      writerRes = await runExcelWriter('append', trade);
       if (writerRes && writerRes.tradeNumber) {
         trade.tradeNumber = writerRes.tradeNumber;
       }
@@ -109,7 +110,11 @@ export const createTrade = async (req, res) => {
     await trade.save(); // pre-save hooks fire here
 
     notifyClients({ type: 'TRADE_UPDATE', action: 'create' });
-    res.status(201).json({ success: true, data: trade });
+    res.status(201).json({
+      success: true,
+      excelSynced: Boolean(writerRes?.success),
+      data: trade,
+    });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }
@@ -122,9 +127,9 @@ export const getTrades = async (req, res) => {
 
     const filter = {};
     if (session) filter.session = session;
-    if (result)  filter.result  = result;
+    if (result) filter.result = result;
 
-    const skip      = (parseInt(page) - 1) * parseInt(limit);
+    const skip = (parseInt(page) - 1) * parseInt(limit);
     const sortOrder = order === 'asc' ? 1 : -1;
 
     const [trades, total] = await Promise.all([
@@ -141,8 +146,8 @@ export const getTrades = async (req, res) => {
       data: trades,
       pagination: {
         total,
-        page:       parseInt(page),
-        limit:      parseInt(limit),
+        page: parseInt(page),
+        limit: parseInt(limit),
         totalPages: Math.ceil(total / parseInt(limit)),
       },
     });
@@ -180,9 +185,11 @@ export const updateTrade = async (req, res) => {
       runValidators: true,
     });
 
+    let writerRes = null;
+
     // Auto-sync update to Excel file
     try {
-      await runExcelWriter('update', updatedTrade);
+      writerRes = await runExcelWriter('update', updatedTrade);
     } catch (xlsxErr) {
       console.warn('⚠️ Could not sync trade update to Excel file:', xlsxErr.message);
     }
@@ -190,7 +197,10 @@ export const updateTrade = async (req, res) => {
     notifyClients({ type: 'TRADE_UPDATE', action: 'update' });
     res.json({
       success: true,
-      message: 'Trade updated successfully in database and Excel.',
+      excelSynced: Boolean(writerRes?.success),
+      message: writerRes?.success
+        ? 'Trade updated successfully in database and Excel.'
+        : 'Trade updated in database, but Excel sync failed.',
       data: updatedTrade,
     });
   } catch (err) {
@@ -208,9 +218,11 @@ export const deleteTrade = async (req, res) => {
 
     await Trade.findByIdAndDelete(req.params.id);
 
+    let writerRes = null;
+
     // Auto-sync deletion to Excel file
     try {
-      await runExcelWriter('delete', trade);
+      writerRes = await runExcelWriter('delete', trade);
     } catch (xlsxErr) {
       console.warn('⚠️ Could not sync trade deletion to Excel file:', xlsxErr.message);
     }
@@ -218,7 +230,10 @@ export const deleteTrade = async (req, res) => {
     notifyClients({ type: 'TRADE_UPDATE', action: 'delete' });
     res.json({
       success: true,
-      message: 'Trade deleted successfully from database and Excel.',
+      excelSynced: Boolean(writerRes?.success),
+      message: writerRes?.success
+        ? 'Trade deleted successfully from database and Excel.'
+        : 'Trade deleted from database, but Excel sync failed.',
       data: trade,
     });
   } catch (err) {
@@ -242,9 +257,9 @@ export const createBulkTrades = async (req, res) => {
     }
 
     res.status(201).json({
-      success:  true,
-      count:    savedTrades.length,
-      data:     savedTrades,
+      success: true,
+      count: savedTrades.length,
+      data: savedTrades,
     });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -262,10 +277,10 @@ export const syncTrades = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No trades provided' });
     }
 
-    const inserted   = [];
-    const updated    = [];
+    const inserted = [];
+    const updated = [];
     const duplicates = [];
-    const batchSeen  = new Set();
+    const batchSeen = new Set();
 
     for (const data of tradesData) {
       // Normalise date to midnight UTC for comparison
@@ -327,13 +342,13 @@ export const syncTrades = async (req, res) => {
 
       if (existing) {
         // Check if user edited the trade in Excel (RR, image URL, time, result, notes, etc.)
-        const timeChanged    = existing.time !== timeStr;
-        const profitChanged  = Math.abs(existing.profitR - profitR) > 0.001;
-        const resultChanged  = existing.result !== resultStr;
-        const dirChanged     = existing.entryType !== entryTypeStr;
-        const imgChanged     = data.imageUrl !== undefined && existing.imageUrl !== data.imageUrl;
-        const notesChanged   = data.notes !== undefined && existing.notes !== data.notes;
-        const numChanged     = tradeNumber && existing.tradeNumber !== tradeNumber;
+        const timeChanged = existing.time !== timeStr;
+        const profitChanged = Math.abs(existing.profitR - profitR) > 0.001;
+        const resultChanged = existing.result !== resultStr;
+        const dirChanged = existing.entryType !== entryTypeStr;
+        const imgChanged = data.imageUrl !== undefined && existing.imageUrl !== data.imageUrl;
+        const notesChanged = data.notes !== undefined && existing.notes !== data.notes;
+        const numChanged = tradeNumber && existing.tradeNumber !== tradeNumber;
 
         if (timeChanged || profitChanged || resultChanged || dirChanged || imgChanged || notesChanged || numChanged) {
           // UPDATE existing trade in place
@@ -378,12 +393,12 @@ export const syncTrades = async (req, res) => {
     }
 
     res.status(201).json({
-      success:    true,
-      inserted:   inserted.length,
-      updated:    updated.length,
-      skipped:    duplicates.length,
+      success: true,
+      inserted: inserted.length,
+      updated: updated.length,
+      skipped: duplicates.length,
       duplicates,
-      data:       [...inserted, ...updated],
+      data: [...inserted, ...updated],
     });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -395,8 +410,8 @@ export const deleteAllTrades = async (req, res) => {
   try {
     const result = await Trade.deleteMany({});
     res.json({
-      success:      true,
-      message:      `Deleted ${result.deletedCount} trades from database.`,
+      success: true,
+      message: `Deleted ${result.deletedCount} trades from database.`,
       deletedCount: result.deletedCount,
     });
   } catch (err) {
@@ -411,16 +426,16 @@ export const exportTradesToExcel = async (req, res) => {
     const trades = await Trade.find({}).sort({ date: 1, time: 1 }).lean();
 
     const rows = trades.map((t) => ({
-      'PAIR':              t.pair,
-      'Time':              t.time,
-      'Date':              t.date ? new Date(t.date).toISOString().split('T')[0] : '',
-      'Profit R':          t.profitR,
-      'Risk %':            `${t.riskPercent}%`,
-      'Account balance':   t.accountBalance,
-      'Trade Result':      t.result,
-      'Entry Type':        t.entryType,
+      'PAIR': t.pair,
+      'Time': t.time,
+      'Date': t.date ? new Date(t.date).toISOString().split('T')[0] : '',
+      'Profit R': t.profitR,
+      'Risk %': `${t.riskPercent}%`,
+      'Account balance': t.accountBalance,
+      'Trade Result': t.result,
+      'Entry Type': t.entryType,
       'Trade Image (url)': t.imageUrl || '',
-      'Notes':             t.notes    || '',
+      'Notes': t.notes || '',
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows, { header: EXCEL_HEADERS });
@@ -448,7 +463,7 @@ export const reconcileTrades = async (req, res) => {
     }
 
     let inserted = 0;
-    let updated  = 0;
+    let updated = 0;
 
     // ── Step 0: Remove any existing duplicates in DB (keep the newest one) ────
     const dupCheck = await Trade.aggregate([
@@ -467,31 +482,31 @@ export const reconcileTrades = async (req, res) => {
       const data = tradesData[idx];
 
       // Row # in Excel is the authoritative unique key for every trade
-      const tradeNumber  = data.tradeNumber ? parseInt(data.tradeNumber, 10) : (idx + 1);
+      const tradeNumber = data.tradeNumber ? parseInt(data.tradeNumber, 10) : (idx + 1);
       incomingNumbers.add(tradeNumber);
 
       const normalizedDate = data.date ? new Date(data.date) : new Date();
-      const timeStr      = String(data.time      || '12:00').trim();
-      const pairStr      = String(data.pair      || '').trim().toUpperCase();
-      const profitR      = typeof data.profitR === 'number' ? data.profitR : parseFloat(data.profitR) || 0;
-      const resultStr    = String(data.result    || (profitR >= 0 ? 'TP' : 'SL')).toUpperCase();
+      const timeStr = String(data.time || '12:00').trim();
+      const pairStr = String(data.pair || '').trim().toUpperCase();
+      const profitR = typeof data.profitR === 'number' ? data.profitR : parseFloat(data.profitR) || 0;
+      const resultStr = String(data.result || (profitR >= 0 ? 'TP' : 'SL')).toUpperCase();
       const entryTypeStr = String(data.entryType || 'Long');
 
       const updateFields = {
         tradeNumber,
-        date:       normalizedDate,
-        time:       timeStr,
-        pair:       pairStr,
+        date: normalizedDate,
+        time: timeStr,
+        pair: pairStr,
         profitR,
-        result:     resultStr,
-        entryType:  entryTypeStr,
-        session:    data.session || detectSession(timeStr),
+        result: resultStr,
+        entryType: entryTypeStr,
+        session: data.session || detectSession(timeStr),
       };
-      if (data.riskPercent    !== undefined) updateFields.riskPercent    = data.riskPercent;
-      if (data.riskDollar     !== undefined) updateFields.riskDollar     = data.riskDollar;
+      if (data.riskPercent !== undefined) updateFields.riskPercent = data.riskPercent;
+      if (data.riskDollar !== undefined) updateFields.riskDollar = data.riskDollar;
       if (data.accountBalance !== undefined) updateFields.accountBalance = data.accountBalance;
-      if (data.imageUrl       !== undefined) updateFields.imageUrl       = data.imageUrl;
-      if (data.notes          !== undefined) updateFields.notes          = data.notes;
+      if (data.imageUrl !== undefined) updateFields.imageUrl = data.imageUrl;
+      if (data.notes !== undefined) updateFields.notes = data.notes;
 
       // Atomic upsert by tradeNumber — findOneAndUpdate never races or duplicates
       const before = await Trade.findOne({ tradeNumber }).lean();
@@ -501,7 +516,7 @@ export const reconcileTrades = async (req, res) => {
         { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
       );
       if (before) updated++;
-      else        inserted++;
+      else inserted++;
     }
 
     // Remove trades from DB whose row number no longer exists in Excel
@@ -521,12 +536,12 @@ export const reconcileTrades = async (req, res) => {
     }
 
     res.json({
-      success:  true,
+      success: true,
       inserted,
       updated,
       deleted,
       total,
-      message:  `Reconciled: ${inserted} added, ${updated} updated, ${deleted} deleted. Total: ${total}`,
+      message: `Reconciled: ${inserted} added, ${updated} updated, ${deleted} deleted. Total: ${total}`,
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

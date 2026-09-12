@@ -1,26 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { useLiveMode, DUMMY_CALENDAR_DAYS } from '../context/LiveModeContext';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL
   ? `${import.meta.env.VITE_BACKEND_URL}/api/v1`
   : 'https://digidata.onrender.com/api/v1';
 
 export function useCalendar() {
-  const { isLiveMode } = useLiveMode() || { isLiveMode: false };
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1); // 1-12
   const [year, setYear] = useState(now.getFullYear());
-  const [days, setDays] = useState(isLiveMode ? {} : DUMMY_CALENDAR_DAYS);
-  const [loading, setLoading] = useState(isLiveMode);
+  const [days, setDays] = useState({});
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchCalendar = useCallback(async () => {
-    if (!isLiveMode) {
-      setDays(DUMMY_CALENDAR_DAYS);
-      setLoading(false);
-      return;
-    }
     try {
       setLoading(true);
       setError(null);
@@ -31,7 +24,7 @@ export function useCalendar() {
     } finally {
       setLoading(false);
     }
-  }, [isLiveMode, month, year]);
+  }, [month, year]);
 
   useEffect(() => { fetchCalendar(); }, [fetchCalendar]);
 

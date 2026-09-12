@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useLiveMode, DUMMY_MONTHLY_RETURNS } from '../context/LiveModeContext';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL
   ? `${import.meta.env.VITE_BACKEND_URL}/api/v1`
@@ -8,17 +7,11 @@ const API_BASE = import.meta.env.VITE_BACKEND_URL
 const MONTH_HEADERS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const MonthlyReturnsMatrix = () => {
-  const { isLiveMode } = useLiveMode() || { isLiveMode: false };
-  const [matrixData, setMatrixData] = useState(isLiveMode ? [] : DUMMY_MONTHLY_RETURNS);
-  const [loading, setLoading] = useState(isLiveMode);
+  const [matrixData, setMatrixData] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('All');
 
   useEffect(() => {
-    if (!isLiveMode) {
-      setMatrixData(DUMMY_MONTHLY_RETURNS);
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     fetch(`${API_BASE}/analytics/monthly-returns`)
       .then((r) => r.json())
@@ -27,7 +20,7 @@ const MonthlyReturnsMatrix = () => {
       })
       .catch(() => { })
       .finally(() => setLoading(false));
-  }, [isLiveMode]);
+  }, []);
 
   if (loading) {
     return (

@@ -1,60 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useLiveMode } from '../context/LiveModeContext';
-
-const INITIAL_DUMMY_STRATEGIES = [
-  {
-    id: 's1',
-    name: 'ICT Silver Bullet Model',
-    session: 'New York Session',
-    pairs: 'EURUSD, GBPUSD, NQ',
-    winRate: 68.5,
-    rr: '1:2.5',
-    trades: 142,
-    profitR: '+97.5R',
-    description: 'Backtest 10 AM & 2 PM NY session fair value gap entries with liquidity sweep & 1:2.5 RR target.',
-    color: 'cyan',
-    icon: 'ri-flashlight-line',
-  },
-  {
-    id: 's2',
-    name: 'Asia Range Liquidity Sweep',
-    session: 'London Open',
-    pairs: 'GBPUSD, EURUSD',
-    winRate: 72.0,
-    rr: '1:2.0',
-    trades: 98,
-    profitR: '+70.5R',
-    description: 'London open sweep of Asian high/low with M5 market structure shift & order block tap.',
-    color: 'emerald',
-    icon: 'ri-pulse-line',
-  },
-  {
-    id: 's3',
-    name: 'HTF Order Block Tap',
-    session: 'All Sessions',
-    pairs: 'XAUUSD, NQ, ES',
-    winRate: 64.0,
-    rr: '1:3.0',
-    trades: 85,
-    profitR: '+81.0R',
-    description: 'Daily/H4 order block mitigation entries with premium/discount Fibonacci 0.618 OTE confirmation.',
-    color: 'purple',
-    icon: 'ri-compass-3-line',
-  },
-  {
-    id: 's4',
-    name: 'Pre-NY News Expansion Fade',
-    session: 'New York (8:30 AM)',
-    pairs: 'EURUSD, USDJPY',
-    winRate: 61.5,
-    rr: '1:2.8',
-    trades: 62,
-    profitR: '+48.2R',
-    description: 'Fade initial news spike after stop run into 15m Fair Value Gap.',
-    color: 'amber',
-    icon: 'ri-fire-line',
-  },
-];
 
 const COLOR_CLASSES = {
   cyan: {
@@ -95,27 +39,12 @@ const COLOR_CLASSES = {
 };
 
 const BacktestView = () => {
-  const { isLiveMode } = useLiveMode() || { isLiveMode: false };
   const [liveStrategies, setLiveStrategies] = useState(() => {
     const saved = localStorage.getItem('liveStrategies');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try { return JSON.parse(saved); } catch (e) { }
     }
-    return [
-      {
-        id: 'ls1',
-        name: 'Live ICT FVG Scalper',
-        session: 'New York Session',
-        pairs: 'EURUSD, NQ',
-        winRate: 70.0,
-        rr: '1:2.0',
-        trades: 34,
-        profitR: '+28.0R',
-        description: 'Live strategy model tracking real-time order block taps and M5 fair value gaps.',
-        color: 'emerald',
-        icon: 'ri-pulse-line',
-      },
-    ];
+    return [];
   });
 
   useEffect(() => {
@@ -135,7 +64,7 @@ const BacktestView = () => {
   const [formDescription, setFormDescription] = useState('');
   const [formColor, setFormColor] = useState('cyan');
 
-  const activeStrategies = isLiveMode ? liveStrategies : INITIAL_DUMMY_STRATEGIES;
+  const activeStrategies = liveStrategies;
 
   const openCreateModal = () => {
     setEditingStrategy(null);
@@ -171,15 +100,15 @@ const BacktestView = () => {
         prev.map((s) =>
           s.id === editingStrategy.id
             ? {
-                ...s,
-                name: formName.trim(),
-                session: formSession,
-                pairs: formPairs,
-                winRate: parseFloat(formWinRate) || s.winRate,
-                rr: formRR,
-                description: formDescription,
-                color: formColor,
-              }
+              ...s,
+              name: formName.trim(),
+              session: formSession,
+              pairs: formPairs,
+              winRate: parseFloat(formWinRate) || s.winRate,
+              rr: formRR,
+              description: formDescription,
+              color: formColor,
+            }
             : s
         )
       );
@@ -217,22 +146,17 @@ const BacktestView = () => {
             <i className="ri-shape-2-line text-cyan-400" /> Backtest Strategy Models
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            {isLiveMode
-              ? 'Live Execution Mode — Manage, edit, and add active live trading strategies.'
-              : 'Backtest Mode (Dummy Data) — Pre-tested model statistics & performance metrics.'}
+            Manage, edit, and add active trading strategies.
           </p>
         </div>
 
-        {/* Show Add Strategy button ONLY when switched to Live Mode */}
-        {isLiveMode && (
-          <button
-            onClick={openCreateModal}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 active:scale-95 transition-all self-start sm:self-auto"
-          >
-            <i className="ri-add-line text-base" />
-            <span>+ Add Strategy</span>
-          </button>
-        )}
+        <button
+          onClick={openCreateModal}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 active:scale-95 transition-all self-start sm:self-auto"
+        >
+          <i className="ri-add-line text-base" />
+          <span>+ Add Strategy</span>
+        </button>
       </div>
 
       {/* Strategy Cards Grid */}
@@ -294,26 +218,24 @@ const BacktestView = () => {
                 <button
                   className={`flex-1 py-2 px-4 rounded-xl text-xs font-extrabold shadow-md active:scale-95 transition-all ${theme.btn}`}
                 >
-                  {isLiveMode ? 'Execute Model' : 'Run Backtest'}
+                  Execute Model
                 </button>
-                {isLiveMode && (
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => openEditModal(strat)}
-                      className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
-                      title="Edit Strategy"
-                    >
-                      <i className="ri-pencil-line text-sm text-cyan-400" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteStrategy(strat.id)}
-                      className="p-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-500/30 transition-colors"
-                      title="Delete Strategy"
-                    >
-                      <i className="ri-delete-bin-line text-sm" />
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => openEditModal(strat)}
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                    title="Edit Strategy"
+                  >
+                    <i className="ri-pencil-line text-sm text-cyan-400" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteStrategy(strat.id)}
+                    className="p-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-500/30 transition-colors"
+                    title="Delete Strategy"
+                  >
+                    <i className="ri-delete-bin-line text-sm" />
+                  </button>
+                </div>
               </div>
             </div>
           );

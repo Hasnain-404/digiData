@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { DUMMY_TRADES, DUMMY_KPIS } from '../context/LiveModeContext';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL
   ? `${import.meta.env.VITE_BACKEND_URL}/api/v1`
@@ -104,11 +103,7 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
         // Ignore network errors in demo/offline mode
       }
 
-      if (isMounted) {
-        const dummyBal = DUMMY_TRADES[0]?.accountBalance || DUMMY_KPIS.currentBalance || 10000;
-        setForm((f) => ({ ...f, accountBalance: dummyBal }));
-        setFetchingBalance(false);
-      }
+      if (isMounted) setFetchingBalance(false);
     };
 
     fetchPrevBalance();
@@ -333,8 +328,8 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
                   setForm((f) => ({ ...f, riskDollar: val }));
                 }}
                 className={`h-9 px-3 rounded-lg bg-slate-800/80 border text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all input-glow ${riskDollarManual
-                    ? 'border-amber-500/60 focus:border-amber-400'
-                    : 'border-slate-700 focus:border-blue-500'
+                  ? 'border-amber-500/60 focus:border-amber-400'
+                  : 'border-slate-700 focus:border-blue-500'
                   }`}
               />
             </div>
