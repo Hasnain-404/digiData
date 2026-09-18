@@ -346,7 +346,10 @@ const ExcelImportModal = ({ isOpen, onClose, onSuccess }) => {
       // Use /sync instead of /bulk — smart duplicate filter by date+time
       const response = await fetch(`${API_BASE}/trades/sync`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-pin': localStorage.getItem('digidata_owner_pin') || '',
+        },
         body: JSON.stringify(payload),
       });
 

@@ -110,6 +110,29 @@ async function syncTradeToSheet(action, trade) {
   return runExcelWriter(action, trade);
 }
 
+// ─── Owner Admin Security Middleware ─────────────────────────────────────────
+export const requireAdminPin = (req, res, next) => {
+  const adminPin = process.env.ADMIN_PIN || '1234';
+  const clientPin = req.headers['x-admin-pin'];
+
+  if (!clientPin || String(clientPin).trim() !== String(adminPin).trim()) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access Denied: Owner PIN is required to add, edit, or delete trades.',
+    });
+  }
+  next();
+};
+
+export const verifyAdminPin = (req, res) => {
+  const adminPin = process.env.ADMIN_PIN || '1234';
+  const { pin } = req.body || {};
+  if (pin && String(pin).trim() === String(adminPin).trim()) {
+    return res.json({ success: true, message: 'Owner PIN verified successfully' });
+  }
+  return res.status(401).json({ success: false, message: 'Incorrect Owner PIN' });
+};
+
 // ─── Real-Time Server-Sent Events (SSE) ──────────────────────────────────────
 const sseClients = new Set();
 
@@ -454,17 +477,12 @@ export const syncTrades = async (req, res) => {
 };
 
 // ─── DELETE /api/v1/trades ───────────────────────────────────────────────────
+// Permanently disabled to protect Google Sheet and database from accidental wipes
 export const deleteAllTrades = async (req, res) => {
-  try {
-    const result = await Trade.deleteMany({});
-    res.json({
-      success: true,
-      message: `Deleted ${result.deletedCount} trades from database.`,
-      deletedCount: result.deletedCount,
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
+  return res.status(403).json({
+    success: false,
+    message: 'Mass delete has been permanently disabled to prevent data loss.',
+  });
 };
 
 // ─── GET /api/v1/trades/export ────────────────────────────────────────────────

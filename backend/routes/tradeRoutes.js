@@ -6,23 +6,31 @@ import {
   updateTrade,
   deleteTrade,
   createBulkTrades,
-  deleteAllTrades,
   syncTrades,
   reconcileTrades,
   exportTradesToExcel,
   sseStream,
   syncFromGoogleSheet,
+  requireAdminPin,
+  verifyAdminPin,
 } from '../controllers/tradeController.js';
 
 const router = Router();
 
+// ── Public Routes (Anyone can view & learn) ──────────────────────────────────
 router.get('/stream',             sseStream);           // SSE: real-time trade update events
-router.route('/').get(getTrades).post(createTrade).delete(deleteAllTrades);
-router.post('/sync-google-sheet', syncFromGoogleSheet); // Pull & mirror all trades from Google Sheet
-router.route('/:id').get(getTradeById).put(updateTrade).delete(deleteTrade);
-router.post('/bulk',              createBulkTrades);
-router.post('/sync',              syncTrades);          // Smart sync with precise duplicate filter
-router.post('/reconcile',         reconcileTrades);     // Full mirror sync: add, update, delete
-router.get('/export',             exportTradesToExcel); // Download all trades as .xlsx
+router.get('/',                   getTrades);           // View all trades
+router.get('/export',             exportTradesToExcel); // Download trades as .xlsx
+router.get('/:id',                getTradeById);        // View single trade details
+router.post('/verify-pin',        verifyAdminPin);      // Verify Owner PIN
+
+// ── Owner Protected Routes (Require Owner PIN) ────────────────────────────────
+router.post('/',                  requireAdminPin, createTrade);         // Add single trade
+router.put('/:id',                requireAdminPin, updateTrade);         // Edit single trade
+router.delete('/:id',             requireAdminPin, deleteTrade);         // Delete single trade
+router.post('/sync-google-sheet', requireAdminPin, syncFromGoogleSheet); // Pull & mirror Google Sheet
+router.post('/bulk',              requireAdminPin, createBulkTrades);
+router.post('/sync',              requireAdminPin, syncTrades);
+router.post('/reconcile',         requireAdminPin, reconcileTrades);
 
 export default router;

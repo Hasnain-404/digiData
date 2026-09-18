@@ -39,10 +39,12 @@ export function useTrades() {
   useEffect(() => { fetchTrades(); }, [fetchTrades]);
 
   // Create a new trade
-  const createTrade = async (tradeData) => {
+  const createTrade = async (tradeData, customHeaders = {}) => {
     try {
       setCreating(true);
-      const res = await axios.post(`${API_BASE}/trades`, tradeData);
+      const pin = localStorage.getItem('digidata_owner_pin') || '';
+      const headers = { 'x-admin-pin': pin, ...customHeaders };
+      const res = await axios.post(`${API_BASE}/trades`, tradeData, { headers });
       await fetchTrades(); // refresh list
       return { success: true, data: res.data.data };
     } catch (err) {
@@ -53,9 +55,11 @@ export function useTrades() {
   };
 
   // Delete a trade
-  const deleteTrade = async (id) => {
+  const deleteTrade = async (id, customHeaders = {}) => {
     try {
-      const res = await axios.delete(`${API_BASE}/trades/${id}`);
+      const pin = localStorage.getItem('digidata_owner_pin') || '';
+      const headers = { 'x-admin-pin': pin, ...customHeaders };
+      const res = await axios.delete(`${API_BASE}/trades/${id}`, { headers });
       await fetchTrades();
       return { success: true, data: res.data.data };
     } catch (err) {

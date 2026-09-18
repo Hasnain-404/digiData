@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTrades } from '../hooks/useTrades';
+import { useAdmin } from '../context/AdminContext';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -53,6 +54,7 @@ const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
     sortBy, order, toggleSort,
     deleteTrade, refetch,
   } = useTrades();
+  const { isAdmin } = useAdmin();
 
   const [deletingId, setDeletingId] = useState(null);
 
@@ -101,28 +103,6 @@ const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
 
         {/* Filters & Actions */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={async () => {
-              if (window.confirm('Are you sure you want to delete all trades from database?')) {
-                try {
-                  const res = await fetch(`${API_BASE}/trades`, { method: 'DELETE' });
-                  const data = await res.json();
-                  if (data.success) {
-                    toast.success(`Cleared ${data.deletedCount} trades!`);
-                    if (onTradeDeleted) onTradeDeleted();
-                    refetch();
-                  }
-                } catch (e) {
-                  toast.error('Error clearing trades');
-                }
-              }
-            }}
-            className="h-8 px-2.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 text-xs font-semibold transition-colors flex items-center gap-1"
-            title="Wipe old database entries to upload fresh sheet"
-          >
-            <i className="ri-delete-bin-line text-xs" />
-            <span>Clear All Data</span>
-          </button>
           <select
             id="filter-session"
             value={filters.session}
@@ -157,7 +137,7 @@ const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
                   <SortIcon active={sortBy === key} order={order} />
                 </th>
               ))}
-              <th className="text-center select-none">Action</th>
+              {isAdmin && <th className="text-center select-none">Action</th>}
             </tr>
           </thead>
           <tbody>
@@ -167,18 +147,18 @@ const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
                   {colHeaders.map((_, j) => (
                     <td key={j}><div className="skeleton h-4 w-full" /></td>
                   ))}
-                  <td><div className="skeleton h-4 w-full" /></td>
+                  {isAdmin && <td><div className="skeleton h-4 w-full" /></td>}
                 </tr>
               ))
             ) : error ? (
               <tr>
-                <td colSpan={colHeaders.length + 1} className="text-center py-10 text-rose-400">
+                <td colSpan={colHeaders.length + (isAdmin ? 1 : 0)} className="text-center py-10 text-rose-400">
                   {error}
                 </td>
               </tr>
             ) : trades.length === 0 ? (
               <tr>
-                <td colSpan={colHeaders.length + 1} className="text-center py-12 text-slate-600">
+                <td colSpan={colHeaders.length + (isAdmin ? 1 : 0)} className="text-center py-12 text-slate-600">
                   <div className="flex flex-col items-center gap-2">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-8 h-8 text-slate-700">
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
@@ -216,20 +196,22 @@ const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
                   <td className="text-slate-400">{trade.riskPercent}%</td>
                   <td className="text-amber-400 font-mono-nums">${trade.riskDollar?.toFixed(2)}</td>
                   <td className="text-slate-300 font-mono-nums">${trade.accountBalance?.toLocaleString()}</td>
-                  <td className="text-center">
-                    <button
-                      onClick={() => handleDeleteTrade(trade)}
-                      disabled={deletingId === trade._id}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all inline-flex items-center justify-center"
-                      title={`Delete ${trade.pair} (${trade.time}) from website & Excel sheet`}
-                    >
-                      {deletingId === trade._id ? (
-                        <i className="ri-loader-4-line animate-spin text-sm text-rose-400" />
-                      ) : (
-                        <i className="ri-delete-bin-line text-sm" />
-                      )}
-                    </button>
-                  </td>
+                  {isAdmin && (
+                    <td className="text-center">
+                      <button
+                        onClick={() => handleDeleteTrade(trade)}
+                        disabled={deletingId === trade._id}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all inline-flex items-center justify-center"
+                        title={`Delete ${trade.pair} (${trade.time}) from website & Sheet`}
+                      >
+                        {deletingId === trade._id ? (
+                          <i className="ri-loader-4-line animate-spin text-sm text-rose-400" />
+                        ) : (
+                          <i className="ri-delete-bin-line text-sm" />
+                        )}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))
             )}

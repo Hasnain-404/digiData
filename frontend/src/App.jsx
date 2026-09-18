@@ -14,6 +14,8 @@ import ExcelImportModal from './components/ExcelImportModal';
 import NotebookView from './components/NotebookView';
 import BacktestView from './components/BacktestView';
 import DayBreakdownTable from './components/DayBreakdownTable';
+import { AdminProvider } from './context/AdminContext';
+import AdminPinModal from './components/AdminPinModal';
 
 
 const SectionHeader = ({ title, subtitle, icon }) => (
@@ -53,7 +55,12 @@ const AppContent = () => {
         ? `${import.meta.env.VITE_BACKEND_URL}/api/v1`
         : 'https://digidata.onrender.com/api/v1';
 
-      const res = await fetch(`${apiBase}/trades/sync-google-sheet`, { method: 'POST' });
+      const res = await fetch(`${apiBase}/trades/sync-google-sheet`, {
+        method: 'POST',
+        headers: {
+          'x-admin-pin': localStorage.getItem('digidata_owner_pin') || '',
+        },
+      });
       const data = await res.json();
       if (data.success) {
         toast.success(`Google Sheet synced! (${data.total || 0} trades)`, { id: toastId });
@@ -231,6 +238,11 @@ const AppContent = () => {
   );
 };
 
-const App = () => <AppContent />;
+const App = () => (
+  <AdminProvider>
+    <AppContent />
+    <AdminPinModal />
+  </AdminProvider>
+);
 
 export default App;

@@ -163,7 +163,10 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
     try {
       const res = await fetch(`${API_BASE}/trades`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-pin': localStorage.getItem('digidata_owner_pin') || '',
+        },
         body: JSON.stringify({
           ...form,
           profitR: parseFloat(form.profitR),
