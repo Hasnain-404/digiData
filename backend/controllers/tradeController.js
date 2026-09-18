@@ -62,6 +62,54 @@ function runExcelWriter(action, trade) {
   });
 }
 
+// ─── Google Sheet Webhook Sync Helper ────────────────────────────────────────
+async function syncToGoogleSheet(action, trade) {
+  const webhookUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL;
+  if (!webhookUrl) return null;
+
+  try {
+    const tradePayload = {
+      tradeNumber: trade.tradeNumber,
+      pair: trade.pair,
+      date: trade.date ? new Date(trade.date).toISOString().split('T')[0] : '',
+      time: trade.time,
+      profitR: trade.profitR,
+      riskPercent: trade.riskPercent,
+      riskDollar: trade.riskDollar,
+      accountBalance: trade.accountBalance,
+      result: trade.result,
+      entryType: trade.entryType,
+      imageUrl: trade.imageUrl || '',
+      notes: trade.notes || '',
+    };
+
+    console.log(`📡 Pushing to Google Sheet (${action})...`);
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, trade: tradePayload }),
+    });
+
+    const data = await res.json();
+    console.log(`✅ Google Sheet (${action}) response:`, data);
+    return data;
+  } catch (err) {
+    console.warn(`⚠️ Google Sheet (${action}) error:`, err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+// Unified sheet writer: Prioritizes Google Sheet webhook, falls back to local Excel
+async function syncTradeToSheet(action, trade) {
+  if (process.env.GOOGLE_SHEET_WEBHOOK_URL) {
+    const gRes = await syncToGoogleSheet(action, trade);
+    if (gRes && gRes.success) {
+      return gRes;
+    }
+  }
+  return runExcelWriter(action, trade);
+}
+
 // ─── Real-Time Server-Sent Events (SSE) ──────────────────────────────────────
 const sseClients = new Set();
 
@@ -97,14 +145,14 @@ export const createTrade = async (req, res) => {
     const trade = new Trade(req.body);
     let writerRes = null;
 
-    // ── Write back to Excel automatically ────────────────────────────────────
+    // ── Write back to Google Sheet / Excel automatically ────────────────────
     try {
-      writerRes = await runExcelWriter('append', trade);
+      writerRes = await syncTradeToSheet('append', trade);
       if (writerRes && writerRes.tradeNumber) {
         trade.tradeNumber = writerRes.tradeNumber;
       }
     } catch (xlsxErr) {
-      console.warn('⚠️ Could not write to Excel file:', xlsxErr.message);
+      console.warn('⚠️ Could not write to sheet:', xlsxErr.message);
     }
 
     await trade.save(); // pre-save hooks fire here
@@ -187,11 +235,11 @@ export const updateTrade = async (req, res) => {
 
     let writerRes = null;
 
-    // Auto-sync update to Excel file
+    // Auto-sync update to Google Sheet / Excel
     try {
-      writerRes = await runExcelWriter('update', updatedTrade);
+      writerRes = await syncTradeToSheet('update', updatedTrade);
     } catch (xlsxErr) {
-      console.warn('⚠️ Could not sync trade update to Excel file:', xlsxErr.message);
+      console.warn('⚠️ Could not sync trade update to sheet:', xlsxErr.message);
     }
 
     notifyClients({ type: 'TRADE_UPDATE', action: 'update' });
@@ -199,8 +247,8 @@ export const updateTrade = async (req, res) => {
       success: true,
       excelSynced: Boolean(writerRes?.success),
       message: writerRes?.success
-        ? 'Trade updated successfully in database and Excel.'
-        : 'Trade updated in database, but Excel sync failed.',
+        ? 'Trade updated successfully in database and sheet.'
+        : 'Trade updated in database, but sheet sync failed.',
       data: updatedTrade,
     });
   } catch (err) {
@@ -220,11 +268,11 @@ export const deleteTrade = async (req, res) => {
 
     let writerRes = null;
 
-    // Auto-sync deletion to Excel file
+    // Auto-sync deletion to Google Sheet / Excel
     try {
-      writerRes = await runExcelWriter('delete', trade);
+      writerRes = await syncTradeToSheet('delete', trade);
     } catch (xlsxErr) {
-      console.warn('⚠️ Could not sync trade deletion to Excel file:', xlsxErr.message);
+      console.warn('⚠️ Could not sync trade deletion to sheet:', xlsxErr.message);
     }
 
     notifyClients({ type: 'TRADE_UPDATE', action: 'delete' });
@@ -232,8 +280,8 @@ export const deleteTrade = async (req, res) => {
       success: true,
       excelSynced: Boolean(writerRes?.success),
       message: writerRes?.success
-        ? 'Trade deleted successfully from database and Excel.'
-        : 'Trade deleted from database, but Excel sync failed.',
+        ? 'Trade deleted successfully from database and sheet.'
+        : 'Trade deleted from database, but sheet sync failed.',
       data: trade,
     });
   } catch (err) {
@@ -544,6 +592,69 @@ export const reconcileTrades = async (req, res) => {
       message: `Reconciled: ${inserted} added, ${updated} updated, ${deleted} deleted. Total: ${total}`,
     });
   } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── POST /api/v1/trades/sync-google-sheet ────────────────────────────────────
+// Pulls all trades from Google Sheet Webhook and mirrors them into MongoDB
+export const syncFromGoogleSheet = async (req, res) => {
+  const webhookUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL;
+  if (!webhookUrl) {
+    return res.status(400).json({
+      success: false,
+      message: 'GOOGLE_SHEET_WEBHOOK_URL is not configured in backend environment variables.',
+    });
+  }
+
+  try {
+    console.log('📥 Pulling trades from Google Sheet Webhook...');
+    const response = await fetch(webhookUrl);
+    const data = await response.json();
+
+    if (!data.success || !Array.isArray(data.trades)) {
+      return res.status(502).json({
+        success: false,
+        message: 'Failed to fetch trades from Google Sheet.',
+      });
+    }
+
+    const tradesData = data.trades.map((t) => {
+      // Normalize time to HH:MM
+      let timeStr = String(t.time || '12:00').trim();
+      const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
+      if (timeMatch) {
+        timeStr = `${String(timeMatch[1]).padStart(2, '0')}:${timeMatch[2]}`;
+      }
+
+      // Normalize date to YYYY-MM-DD
+      let dateVal = t.date;
+      if (typeof dateVal === 'string' && dateVal.includes('GMT')) {
+        const parsed = new Date(dateVal);
+        if (!isNaN(parsed.getTime())) {
+          dateVal = parsed.toISOString().split('T')[0];
+        }
+      }
+
+      return {
+        tradeNumber: t.tradeNumber,
+        pair: t.pair,
+        date: dateVal,
+        time: timeStr,
+        profitR: t.profitR,
+        riskPercent: t.riskPercent,
+        result: t.result,
+        entryType: t.entryType,
+        imageUrl: t.imageUrl || '',
+        notes: t.notes || '',
+      };
+    });
+
+    console.log(`📊 Retrieved ${tradesData.length} trades from Google Sheet. Reconciling with database...`);
+    req.body = tradesData;
+    return reconcileTrades(req, res);
+  } catch (err) {
+    console.error('Error syncing from Google Sheet:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };

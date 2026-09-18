@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Navbar = ({ activeTab, onNewJournal, onImportExcel }) => {
+const Navbar = ({ activeTab, onNewJournal, onImportExcel, onSyncGoogleSheet, isSyncingSheet }) => {
   const pageTitles = {
     dashboard: 'Dashboard',
     analytics: 'Analytics Overview',
@@ -24,6 +24,18 @@ const Navbar = ({ activeTab, onNewJournal, onImportExcel }) => {
 
         {/* Right side actions */}
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {/* Sync Google Sheet Button */}
+          <button
+            id="btn-sync-sheet"
+            onClick={onSyncGoogleSheet}
+            disabled={isSyncingSheet}
+            className="flex items-center gap-1.5 px-2 sm:px-3.5 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs font-semibold transition-all duration-200 active:scale-95 shadow-sm disabled:opacity-50"
+            title="Sync all trades live from Google Sheet"
+          >
+            <i className={`ri-google-line text-base text-blue-400 ${isSyncingSheet ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{isSyncingSheet ? 'Syncing...' : 'Sync Sheet'}</span>
+          </button>
+
           {/* Import Excel Button */}
           <button
             id="btn-import-excel"

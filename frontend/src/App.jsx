@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import useTradeSync from './hooks/useTradeSync';
-import { Toaster } from 'react-hot-toast';
+import toast, { Toaster } from 'react-hot-toast';
 
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
@@ -35,14 +35,38 @@ const AppContent = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
+  const [isSyncingSheet, setIsSyncingSheet] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const handleTradeSuccess = useCallback(() => {
     setRefreshKey((k) => k + 1);
   }, []);
 
-  // ── Live sync: bump refreshKey whenever the Excel watcher pushes an update ──
+  // ── Live sync: bump refreshKey whenever an update occurs ──
   useTradeSync(handleTradeSuccess);
+
+  const handleSyncGoogleSheet = async () => {
+    setIsSyncingSheet(true);
+    const toastId = toast.loading('Connecting to Google Sheet...');
+    try {
+      const apiBase = import.meta.env.VITE_BACKEND_URL
+        ? `${import.meta.env.VITE_BACKEND_URL}/api/v1`
+        : 'https://digidata.onrender.com/api/v1';
+
+      const res = await fetch(`${apiBase}/trades/sync-google-sheet`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Google Sheet synced! (${data.total || 0} trades)`, { id: toastId });
+        handleTradeSuccess();
+      } else {
+        toast.error(data.message || 'Failed to sync Google Sheet', { id: toastId });
+      }
+    } catch (err) {
+      toast.error('Could not reach backend to sync Google Sheet', { id: toastId });
+    } finally {
+      setIsSyncingSheet(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex bg-[#090d16] text-slate-100 font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
@@ -72,6 +96,8 @@ const AppContent = () => {
           activeTab={activeTab}
           onNewJournal={() => setIsModalOpen(true)}
           onImportExcel={() => setIsExcelModalOpen(true)}
+          onSyncGoogleSheet={handleSyncGoogleSheet}
+          isSyncingSheet={isSyncingSheet}
         />
 
         {/* Main Content Area */}
