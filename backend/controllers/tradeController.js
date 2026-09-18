@@ -616,6 +616,46 @@ export const reconcileTrades = async (req, res) => {
 
 // ─── POST /api/v1/trades/sync-google-sheet ────────────────────────────────────
 // Pulls all trades from Google Sheet Webhook and mirrors them into MongoDB
+// ─── Shared GAS time/date normalizers ───────────────────────────────────────
+// The old GAS serialised Date objects as full strings like:
+//   "Sat Dec 30 1899 13:31:10 GMT+0521 (India Standard Time)"
+// The regex was matching "13:31" (the IST-shifted value) instead of the
+// correct UTC time "08:10".  When a full GMT string is detected we parse the
+// Date and read UTC hours/minutes to get the value the user actually entered.
+function normalizeGasTime(raw) {
+  const s = String(raw || '12:00').trim();
+
+  // Full Date string from old GAS script → parse and use UTC
+  if (s.includes('GMT')) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      const h = String(d.getUTCHours()).padStart(2, '0');
+      const m = String(d.getUTCMinutes()).padStart(2, '0');
+      return `${h}:${m}`;
+    }
+  }
+
+  // Simple "HH:MM" string (new GAS script already formats correctly)
+  const match = s.match(/(\d{1,2}):(\d{2})/);
+  if (match) return `${String(match[1]).padStart(2, '0')}:${match[2]}`;
+
+  return '12:00';
+}
+
+function normalizeGasDate(raw) {
+  if (!raw) return '';
+  const s = String(raw).trim();
+
+  // Full Date string with GMT → parse and return UTC date portion
+  if (s.includes('GMT')) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  }
+
+  // Already YYYY-MM-DD
+  return s;
+}
+
 export const syncFromGoogleSheet = async (req, res) => {
   const webhookUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL;
   if (!webhookUrl) {
@@ -637,40 +677,22 @@ export const syncFromGoogleSheet = async (req, res) => {
       });
     }
 
-    const tradesData = data.trades.map((t) => {
-      // Normalize time to HH:MM
-      let timeStr = String(t.time || '12:00').trim();
-      const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
-      if (timeMatch) {
-        timeStr = `${String(timeMatch[1]).padStart(2, '0')}:${timeMatch[2]}`;
-      }
-
-      // Normalize date to YYYY-MM-DD
-      let dateVal = t.date;
-      if (typeof dateVal === 'string' && dateVal.includes('GMT')) {
-        const parsed = new Date(dateVal);
-        if (!isNaN(parsed.getTime())) {
-          dateVal = parsed.toISOString().split('T')[0];
-        }
-      }
-
-      return {
-        tradeNumber: t.tradeNumber,
-        pair: t.pair,
-        date: dateVal,
-        time: timeStr,
-        profitR: t.profitR,
-        riskPercent: t.riskPercent,
-        // ── Preserve financial fields so accountBalance is never wiped ──
-        ...(t.riskDollar !== undefined && { riskDollar: t.riskDollar }),
-        ...(t.accountBalance !== undefined && t.accountBalance !== null && t.accountBalance !== ''
-          && { accountBalance: parseFloat(t.accountBalance) }),
-        result: t.result,
-        entryType: t.entryType,
-        imageUrl: t.imageUrl || '',
-        notes: t.notes || '',
-      };
-    });
+    const tradesData = data.trades.map((t) => ({
+      tradeNumber:    t.tradeNumber,
+      pair:           t.pair,
+      date:           normalizeGasDate(t.date),
+      time:           normalizeGasTime(t.time),   // ← timezone-aware fix
+      profitR:        t.profitR,
+      riskPercent:    t.riskPercent,
+      // Preserve financial fields so accountBalance is never wiped
+      ...(t.riskDollar !== undefined && { riskDollar: t.riskDollar }),
+      ...(t.accountBalance !== undefined && t.accountBalance !== null && t.accountBalance !== ''
+        && { accountBalance: parseFloat(t.accountBalance) }),
+      result:         t.result,
+      entryType:      t.entryType,
+      imageUrl:       t.imageUrl || '',
+      notes:          t.notes || '',
+    }));
 
     console.log(`📊 Retrieved ${tradesData.length} trades from Google Sheet. Reconciling with database...`);
     req.body = tradesData;
@@ -715,33 +737,21 @@ export const autoSyncFromSheet = async (req, res) => {
       });
     }
 
-    const tradesData = data.trades.map((t) => {
-      let timeStr = String(t.time || '12:00').trim();
-      const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
-      if (timeMatch) timeStr = `${String(timeMatch[1]).padStart(2, '0')}:${timeMatch[2]}`;
-
-      let dateVal = t.date;
-      if (typeof dateVal === 'string' && dateVal.includes('GMT')) {
-        const parsed = new Date(dateVal);
-        if (!isNaN(parsed.getTime())) dateVal = parsed.toISOString().split('T')[0];
-      }
-
-      return {
-        tradeNumber: t.tradeNumber,
-        pair: t.pair,
-        date: dateVal,
-        time: timeStr,
-        profitR: t.profitR,
-        riskPercent: t.riskPercent,
-        ...(t.riskDollar !== undefined && { riskDollar: t.riskDollar }),
-        ...(t.accountBalance !== undefined && t.accountBalance !== null && t.accountBalance !== ''
-          && { accountBalance: parseFloat(t.accountBalance) }),
-        result: t.result,
-        entryType: t.entryType,
-        imageUrl: t.imageUrl || '',
-        notes: t.notes || '',
-      };
-    });
+    const tradesData = data.trades.map((t) => ({
+      tradeNumber:  t.tradeNumber,
+      pair:         t.pair,
+      date:         normalizeGasDate(t.date),
+      time:         normalizeGasTime(t.time),   // ← timezone-aware fix
+      profitR:      t.profitR,
+      riskPercent:  t.riskPercent,
+      ...(t.riskDollar !== undefined && { riskDollar: t.riskDollar }),
+      ...(t.accountBalance !== undefined && t.accountBalance !== null && t.accountBalance !== ''
+        && { accountBalance: parseFloat(t.accountBalance) }),
+      result:       t.result,
+      entryType:    t.entryType,
+      imageUrl:     t.imageUrl || '',
+      notes:        t.notes || '',
+    }));
 
     console.log(`📊 Auto-sync: ${tradesData.length} trades from Google Sheet. Reconciling...`);
     req.body = tradesData;

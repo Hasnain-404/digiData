@@ -1,245 +1,427 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════════╗
  * ║  DigiData — Complete Google Apps Script                             ║
+ * ║  Configured for exact sheet layout:                                 ║
+ * ║   Row 1-2: Summary Statistics & Cards                              ║
+ * ║   Row 3:   Headers                                                  ║
+ * ║   Row 4+:  Trades (Trade #1 starts at Row 4)                        ║
+ * ║                                                                     ║
  * ║  Handles BOTH directions:                                           ║
  * ║   GET  → Website fetches trades from sheet (all fields)             ║
  * ║   POST → Website pushes add/edit/delete to sheet                    ║
- * ║                                                                     ║
- * ║  DEPLOY STEPS:                                                      ║
- * ║   1. Go to Extensions → Apps Script                                 ║
- * ║   2. Replace ALL existing code with this                            ║
- * ║   3. Click 💾 Save                                                  ║
- * ║   4. Click Deploy → Manage Deployments                              ║
- * ║   5. Edit your existing deployment → New Version → Deploy           ║
- * ║   6. Then run installTrigger() once for auto-sync                   ║
+ * ║   TRIGGER → Sheet edits automatically push to Website               ║
  * ╚══════════════════════════════════════════════════════════════════════╝
  *
- * COLUMN ORDER IN YOUR GOOGLE SHEET (must match exactly):
- *   A: Trade #  | B: PAIR | C: Time | D: Date | E: Profit R
- *   F: Risk %   | G: Account Balance | H: Trade Result
- *   I: Entry Type | J: Trade Image (url) | K: Notes
- *
- * If your sheet has a different order, adjust the column letters below.
+ * EXACT COLUMN MAPPING:
+ *   Col 1  (A): # (Trade Number)
+ *   Col 2  (B): PAIR
+ *   Col 3  (C): Time
+ *   Col 4  (D): Date
+ *   Col 5  (E): Year             (Formula: =IF(D...))
+ *   Col 6  (F): Month            (Formula: =IF(D...))
+ *   Col 7  (G): Profit R
+ *   Col 8  (H): Risk %
+ *   Col 9  (I): $ Per Trade      (Formula: =IF(G...))
+ *   Col 10 (J): Account balance  (Formula: =IF(B...))
+ *   Col 11 (K): % Gain/Loss      (Formula)
+ *   Col 12 (L): Drawdown         (Formula)
+ *   Col 13 (M): # Of Trades      (Formula)
+ *   Col 14 (N): Risk $ per position (Formula / Value)
+ *   Col 15 (O): Trade Result     (TP / SL / BE)
+ *   Col 16 (P): Entry Type       (Long / Short)
+ *   Col 17 (Q): Trade Image (url)
+ *   Col 18 (R): Day              (Formula / Day name)
  */
 
-// ─── Sheet Configuration ───────────────────────────────────────────────────
-var SHEET_NAME = 'Trading Journal'; // Change this to your exact sheet/tab name
-
-// Column positions (A=1, B=2, C=3 ... adjust if your sheet is different)
-var COL = {
-  TRADE_NUMBER:   1,   // A
-  PAIR:           2,   // B
-  TIME:           3,   // C
-  DATE:           4,   // D
-  PROFIT_R:       5,   // E
-  RISK_PERCENT:   6,   // F
-  ACCOUNT_BAL:    7,   // G
-  RESULT:         8,   // H
-  ENTRY_TYPE:     9,   // I
-  IMAGE_URL:      10,  // J
-  NOTES:          11,  // K
-};
-
-// ─── Auto-sync Configuration ───────────────────────────────────────────────
+// ─── Configuration ────────────────────────────────────────────────────────
+var SHEET_NAME     = 'Trading Journal';
 var BACKEND_URL    = 'https://digidata.onrender.com';
 var WEBHOOK_SECRET = 'gs_auto_sync_7x9q2p';
 
-// ─── GET Handler — returns all trades as JSON ──────────────────────────────
+// Exact column indices (1-based)
+var COL = {
+  TRADE_NUMBER:     1,   // A: #
+  PAIR:             2,   // B: PAIR
+  TIME:             3,   // C: Time
+  DATE:             4,   // D: Date
+  YEAR:             5,   // E: Year
+  MONTH:            6,   // F: Month
+  PROFIT_R:         7,   // G: Profit R
+  RISK_PERCENT:     8,   // H: Risk %
+  DOLLAR_PER_TRADE: 9,   // I: $ Per Trade
+  ACCOUNT_BAL:      10,  // J: Account balance
+  GAIN_LOSS_PCT:    11,  // K: % Gain/Loss
+  DRAWDOWN:         12,  // L: Drawdown
+  NUM_TRADES:       13,  // M: # Of Trades
+  RISK_DOLLAR:      14,  // N: Risk $ per position
+  RESULT:           15,  // O: Trade Result
+  ENTRY_TYPE:       16,  // P: Entry Type
+  IMAGE_URL:        17,  // Q: Trade Image (url)
+  DAY:              18,  // R: Day
+};
+
+// ─── GET Handler — Website pulls trades from Sheet ────────────────────────
 function doGet(e) {
   try {
     var ss    = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(SHEET_NAME) || ss.getActiveSheet();
-    var data  = sheet.getDataRange().getValues();
+    var tz    = ss.getSpreadsheetTimeZone();
+
+    var rawData     = sheet.getDataRange().getValues();
+    var displayData = sheet.getDataRange().getDisplayValues();
+
+    if (!rawData || rawData.length < 4) {
+      return jsonResponse({ success: true, count: 0, trades: [] });
+    }
+
+    // Dynamically find header row containing 'PAIR' (defaults to row 3 -> index 2)
+    var headerRowIndex = 2;
+    for (var r = 0; r < Math.min(rawData.length, 10); r++) {
+      var rowStr = rawData[r].map(String).join(' ').toUpperCase();
+      if (rowStr.indexOf('PAIR') !== -1 && (rowStr.indexOf('TIME') !== -1 || rowStr.indexOf('DATE') !== -1)) {
+        headerRowIndex = r;
+        break;
+      }
+    }
 
     var trades = [];
 
-    // Row 0 is the header row — skip it
-    for (var i = 1; i < data.length; i++) {
-      var row = data[i];
+    // Trades start after the header row (Row 4 -> index 3)
+    for (var i = headerRowIndex + 1; i < rawData.length; i++) {
+      var rawRow     = rawData[i];
+      var displayRow = displayData[i];
 
-      // Skip completely empty rows
-      if (!row[COL.PAIR - 1] && !row[COL.DATE - 1]) continue;
+      // Validate PAIR cell (Col B)
+      var pairVal = String(displayRow[COL.PAIR - 1] || rawRow[COL.PAIR - 1] || '').trim().toUpperCase();
+      if (!pairVal || pairVal === 'PAIR' || pairVal === 'NONE' || !/^[A-Z0-9/_-]{3,12}$/.test(pairVal)) {
+        continue; // Skip empty / blank template rows
+      }
 
-      var tradeNumber = row[COL.TRADE_NUMBER - 1];
-      var pair        = String(row[COL.PAIR - 1] || '').trim();
-      var time        = formatTime(row[COL.TIME - 1]);
-      var date        = formatDate(row[COL.DATE - 1]);
-      var profitR     = parseFloat(row[COL.PROFIT_R - 1]) || 0;
-      var riskPct     = parseFloat(row[COL.RISK_PERCENT - 1]) || 1;
-      var accountBal  = parseFloat(row[COL.ACCOUNT_BAL - 1]) || null;
-      var result      = String(row[COL.RESULT - 1] || '').trim().toUpperCase();
-      var entryType   = String(row[COL.ENTRY_TYPE - 1] || 'Long').trim();
-      var imageUrl    = String(row[COL.IMAGE_URL - 1] || '').trim();
-      var notes       = String(row[COL.NOTES - 1] || '').trim();
+      // Trade Number (Col A)
+      var tradeNum = parseInt(rawRow[COL.TRADE_NUMBER - 1], 10)
+        || parseInt(displayRow[COL.TRADE_NUMBER - 1], 10)
+        || (i - headerRowIndex);
 
-      // Use row index as tradeNumber if no explicit column
-      if (!tradeNumber) tradeNumber = i; // row 1 = trade 1
+      // Time (Col C) — use display value first to avoid any timezone shifts!
+      var time = formatTime(rawRow[COL.TIME - 1], displayRow[COL.TIME - 1], tz);
+
+      // Date (Col D)
+      var date = formatDate(rawRow[COL.DATE - 1], displayRow[COL.DATE - 1], tz);
+
+      // Profit R (Col G)
+      var profitR = parseFloat(rawRow[COL.PROFIT_R - 1]);
+      if (isNaN(profitR)) profitR = 0;
+
+      // Risk % (Col H)
+      var rawRisk = parseFloat(rawRow[COL.RISK_PERCENT - 1]);
+      var riskPercent = 1;
+      if (!isNaN(rawRisk)) {
+        // e.g. 0.01 -> 1%
+        riskPercent = (rawRisk > 0 && rawRisk < 1) ? Math.round(rawRisk * 10000) / 100 : rawRisk;
+      }
+
+      // Risk $ (Col N)
+      var riskDollar = parseFloat(rawRow[COL.RISK_DOLLAR - 1]) || 50;
+
+      // Account Balance (Col J)
+      var rawBal = parseFloat(rawRow[COL.ACCOUNT_BAL - 1]);
+      var accountBal = (!isNaN(rawBal) && rawBal > 0) ? rawBal : null;
+
+      // Trade Result (Col O)
+      var result = String(displayRow[COL.RESULT - 1] || rawRow[COL.RESULT - 1] || '').trim().toUpperCase();
+      if (!result || (result !== 'TP' && result !== 'SL' && result !== 'BE')) {
+        result = profitR > 0 ? 'TP' : (profitR < 0 ? 'SL' : 'BE');
+      }
+
+      // Entry Type (Col P)
+      var rawEntry = String(displayRow[COL.ENTRY_TYPE - 1] || rawRow[COL.ENTRY_TYPE - 1] || 'Long').trim();
+      var entryType = /^short$/i.test(rawEntry) ? 'Short' : 'Long';
+
+      // Image URL (Col Q)
+      var imageUrl = String(displayRow[COL.IMAGE_URL - 1] || rawRow[COL.IMAGE_URL - 1] || '').trim();
 
       trades.push({
-        tradeNumber:  parseInt(tradeNumber),
-        pair:         pair,
-        time:         time,
-        date:         date,
-        profitR:      profitR,
-        riskPercent:  riskPct,
-        accountBalance: accountBal,  // ← NOW INCLUDED
-        result:       result || (profitR >= 0 ? 'TP' : 'SL'),
-        entryType:    entryType,
-        imageUrl:     imageUrl,
-        notes:        notes,
+        tradeNumber:    tradeNum,
+        pair:           pairVal,
+        time:           time,
+        date:           date,
+        profitR:        profitR,
+        riskPercent:    riskPercent,
+        riskDollar:     riskDollar,
+        accountBalance: accountBal,
+        result:         result,
+        entryType:      entryType,
+        imageUrl:       imageUrl,
+        notes:          '',
       });
     }
 
-    return ContentService
-      .createTextOutput(JSON.stringify({ success: true, trades: trades }))
-      .setMimeType(ContentService.MimeType.JSON);
-
-  } catch (err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ success: false, error: err.message }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-// ─── POST Handler — handles append / update / delete from website ──────────
-function doPost(e) {
-  try {
-    var payload = JSON.parse(e.postData.contents);
-    var action  = payload.action;  // 'append' | 'update' | 'delete'
-    var trade   = payload.trade;
-
-    var ss    = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName(SHEET_NAME) || ss.getActiveSheet();
-
-    if (action === 'append') {
-      return appendTrade(sheet, trade);
-    } else if (action === 'update') {
-      return updateTrade(sheet, trade);
-    } else if (action === 'delete') {
-      return deleteTrade(sheet, trade);
-    } else {
-      // Unknown action — just return ok (e.g., auto-sync heartbeat from Apps Script)
-      return jsonResponse({ success: true, message: 'No action taken' });
-    }
+    return jsonResponse({
+      success: true,
+      count:   trades.length,
+      trades:  trades,
+    });
 
   } catch (err) {
     return jsonResponse({ success: false, error: err.message });
   }
 }
 
-// ─── Append a new trade row ────────────────────────────────────────────────
-function appendTrade(sheet, trade) {
-  var lastRow = sheet.getLastRow() + 1;
-  var tradeNum = trade.tradeNumber || (lastRow - 1);
-
-  sheet.getRange(lastRow, COL.TRADE_NUMBER).setValue(tradeNum);
-  sheet.getRange(lastRow, COL.PAIR).setValue(trade.pair || '');
-  sheet.getRange(lastRow, COL.TIME).setValue(trade.time || '');
-  sheet.getRange(lastRow, COL.DATE).setValue(trade.date || '');
-  sheet.getRange(lastRow, COL.PROFIT_R).setValue(trade.profitR || 0);
-  sheet.getRange(lastRow, COL.RISK_PERCENT).setValue(trade.riskPercent || 1);
-  sheet.getRange(lastRow, COL.ACCOUNT_BAL).setValue(trade.accountBalance || '');
-  sheet.getRange(lastRow, COL.RESULT).setValue(trade.result || '');
-  sheet.getRange(lastRow, COL.ENTRY_TYPE).setValue(trade.entryType || 'Long');
-  sheet.getRange(lastRow, COL.IMAGE_URL).setValue(trade.imageUrl || '');
-  sheet.getRange(lastRow, COL.NOTES).setValue(trade.notes || '');
-
-  return jsonResponse({ success: true, tradeNumber: tradeNum, action: 'appended' });
-}
-
-// ─── Update an existing trade row ─────────────────────────────────────────
-function updateTrade(sheet, trade) {
-  var row = findRowByTradeNumber(sheet, trade.tradeNumber);
-  if (!row) {
-    return jsonResponse({ success: false, error: 'Trade not found: #' + trade.tradeNumber });
+// ─── POST Handler — Website pushes add / edit / delete to Sheet ───────────
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  var acquired = lock.tryLock(10000);
+  if (!acquired) {
+    return jsonResponse({ success: false, error: 'Could not acquire lock, please retry' });
   }
 
-  sheet.getRange(row, COL.PAIR).setValue(trade.pair || '');
-  sheet.getRange(row, COL.TIME).setValue(trade.time || '');
-  sheet.getRange(row, COL.DATE).setValue(trade.date || '');
-  sheet.getRange(row, COL.PROFIT_R).setValue(trade.profitR || 0);
-  sheet.getRange(row, COL.RISK_PERCENT).setValue(trade.riskPercent || 1);
-  if (trade.accountBalance != null) {
-    sheet.getRange(row, COL.ACCOUNT_BAL).setValue(trade.accountBalance);
-  }
-  sheet.getRange(row, COL.RESULT).setValue(trade.result || '');
-  sheet.getRange(row, COL.ENTRY_TYPE).setValue(trade.entryType || 'Long');
-  sheet.getRange(row, COL.IMAGE_URL).setValue(trade.imageUrl || '');
-  sheet.getRange(row, COL.NOTES).setValue(trade.notes || '');
+  try {
+    var body = {};
+    if (e && e.postData && e.postData.contents) {
+      body = JSON.parse(e.postData.contents);
+    }
 
-  return jsonResponse({ success: true, tradeNumber: trade.tradeNumber, action: 'updated' });
+    var action = body.action || '';
+    var trade  = body.trade  || {};
+    var ss     = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet  = ss.getSheetByName(SHEET_NAME) || ss.getActiveSheet();
+
+    // Find header row (defaults to 3)
+    var headerRow = findHeaderRow(sheet);
+
+    if (action === 'create' || action === 'add') {
+      var newTradeNum = findNextTradeNumber(sheet, headerRow);
+      var targetRow   = findNextAvailableRow(sheet, headerRow);
+
+      var pR   = parseFloat(trade.profitR) || 0;
+      var rPct = parseFloat(trade.riskPercent) || 1;
+      var riskDec = rPct > 0.05 ? rPct / 100 : rPct;
+      var res  = String(trade.result || (pR >= 0 ? 'TP' : 'SL')).toUpperCase();
+      var eTyp = /^short$/i.test(trade.entryType) ? 'Short' : 'Long';
+      var dStr = trade.date ? String(trade.date).split('T')[0] : '';
+      var tStr = formatTimeStr(trade.time || '12:00');
+      var prevRow = targetRow - 1;
+
+      // Col A: #
+      sheet.getRange(targetRow, COL.TRADE_NUMBER).setValue(newTradeNum);
+      // Col B: PAIR
+      sheet.getRange(targetRow, COL.PAIR).setValue(String(trade.pair || '').toUpperCase());
+      // Col C: Time
+      sheet.getRange(targetRow, COL.TIME).setValue(tStr);
+      // Col D: Date
+      sheet.getRange(targetRow, COL.DATE).setValue(dStr);
+      // Col E: Year Formula
+      sheet.getRange(targetRow, COL.YEAR).setFormula('=IF(D' + targetRow + '="","",YEAR(D' + targetRow + '))');
+      // Col F: Month Formula
+      sheet.getRange(targetRow, COL.MONTH).setFormula('=IF(D' + targetRow + '="","",TEXT(D' + targetRow + ',"mmm"))');
+      // Col G: Profit R
+      sheet.getRange(targetRow, COL.PROFIT_R).setValue(pR);
+      // Col H: Risk %
+      sheet.getRange(targetRow, COL.RISK_PERCENT).setValue(riskDec);
+      // Col I: $ Per Trade Formula
+      sheet.getRange(targetRow, COL.DOLLAR_PER_TRADE).setFormula('=IF(G' + targetRow + '="","",G' + targetRow + '*N' + targetRow + ')');
+      // Col J: Account balance Formula
+      sheet.getRange(targetRow, COL.ACCOUNT_BAL).setFormula('=IF(B' + targetRow + '=""," ",IF(A' + targetRow + '=1,$J$2+I' + targetRow + ',J' + prevRow + '+I' + targetRow + '))');
+      // Col K: % Gain/Loss Formula
+      sheet.getRange(targetRow, COL.GAIN_LOSS_PCT).setFormula('=IF(J' + targetRow + '="","",IF(ISNUMBER(J' + targetRow + '),(J' + targetRow + '-$J$2)/$J$2,""))');
+      // Col L: Drawdown Formula
+      sheet.getRange(targetRow, COL.DRAWDOWN).setFormula('=IF(J' + targetRow + '="","",(J' + targetRow + '-MAX($J$4:J' + targetRow + '))/MAX($J$4:J' + targetRow + '))');
+      // Col M: # Of Trades Formula
+      sheet.getRange(targetRow, COL.NUM_TRADES).setFormula('=IF(B' + targetRow + '="","",ROW()-3)');
+      // Col N: Risk $ per position Formula
+      sheet.getRange(targetRow, COL.RISK_DOLLAR).setFormula('=$J$2 * H' + targetRow);
+      // Col O: Trade Result
+      sheet.getRange(targetRow, COL.RESULT).setValue(res);
+      // Col P: Entry Type
+      sheet.getRange(targetRow, COL.ENTRY_TYPE).setValue(eTyp);
+      // Col Q: Trade Image (url)
+      sheet.getRange(targetRow, COL.IMAGE_URL).setValue(String(trade.imageUrl || '').trim());
+      // Col R: Day Formula
+      sheet.getRange(targetRow, COL.DAY).setFormula('=IF(D' + targetRow + '="","",TEXT(D' + targetRow + ',"dddd"))');
+
+      SpreadsheetApp.flush();
+      return jsonResponse({ success: true, action: 'create', tradeNumber: newTradeNum, row: targetRow });
+    }
+
+    if (action === 'update' || action === 'edit') {
+      var row = findRowByTradeNumber(sheet, headerRow, trade.tradeNumber);
+      if (!row) {
+        return jsonResponse({ success: false, error: 'Trade #' + trade.tradeNumber + ' not found' });
+      }
+
+      if (trade.pair !== undefined) {
+        sheet.getRange(row, COL.PAIR).setValue(String(trade.pair).toUpperCase());
+      }
+      if (trade.time !== undefined) {
+        sheet.getRange(row, COL.TIME).setValue(formatTimeStr(trade.time));
+      }
+      if (trade.date !== undefined) {
+        sheet.getRange(row, COL.DATE).setValue(String(trade.date).split('T')[0]);
+      }
+      if (trade.profitR !== undefined) {
+        sheet.getRange(row, COL.PROFIT_R).setValue(parseFloat(trade.profitR) || 0);
+      }
+      if (trade.riskPercent !== undefined) {
+        var r = parseFloat(trade.riskPercent) || 1;
+        sheet.getRange(row, COL.RISK_PERCENT).setValue(r > 0.05 ? r / 100 : r);
+      }
+      if (trade.result !== undefined) {
+        sheet.getRange(row, COL.RESULT).setValue(String(trade.result).toUpperCase());
+      }
+      if (trade.entryType !== undefined) {
+        sheet.getRange(row, COL.ENTRY_TYPE).setValue(/^short$/i.test(trade.entryType) ? 'Short' : 'Long');
+      }
+      if (trade.imageUrl !== undefined) {
+        sheet.getRange(row, COL.IMAGE_URL).setValue(String(trade.imageUrl).trim());
+      }
+
+      SpreadsheetApp.flush();
+      return jsonResponse({ success: true, action: 'update', tradeNumber: trade.tradeNumber, row: row });
+    }
+
+    if (action === 'delete') {
+      var delRow = findRowByTradeNumber(sheet, headerRow, trade.tradeNumber);
+      if (!delRow) {
+        return jsonResponse({ success: false, error: 'Trade #' + trade.tradeNumber + ' not found' });
+      }
+
+      sheet.deleteRow(delRow);
+      SpreadsheetApp.flush();
+
+      // Renumber Col A from row 4 to lastRow
+      renumberTrades(sheet, headerRow);
+
+      return jsonResponse({ success: true, action: 'delete', tradeNumber: trade.tradeNumber });
+    }
+
+    return jsonResponse({ success: true, message: 'Pong / No action specified' });
+
+  } catch (err) {
+    return jsonResponse({ success: false, error: err.message });
+  } finally {
+    lock.releaseLock();
+  }
 }
 
-// ─── Delete a trade row ────────────────────────────────────────────────────
-function deleteTrade(sheet, trade) {
-  var row = findRowByTradeNumber(sheet, trade.tradeNumber);
-  if (!row) {
-    return jsonResponse({ success: false, error: 'Trade not found: #' + trade.tradeNumber });
-  }
-
-  sheet.deleteRow(row);
-
-  // Re-number all remaining trades after deletion
-  renumberTrades(sheet);
-
-  return jsonResponse({ success: true, tradeNumber: trade.tradeNumber, action: 'deleted' });
-}
-
-// ─── Helper: find row by trade number ─────────────────────────────────────
-function findRowByTradeNumber(sheet, tradeNumber) {
-  var data = sheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (parseInt(data[i][COL.TRADE_NUMBER - 1]) === parseInt(tradeNumber)) {
-      return i + 1; // 1-indexed row number
+// ─── Helpers: Time & Date Formatting ──────────────────────────────────────
+function formatTime(rawVal, displayVal, tz) {
+  // 1. If display value looks like "8:10", "08:10", "8:10:00" -> use it directly!
+  if (displayVal) {
+    var match = String(displayVal).trim().match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      return match[1].padStart(2, '0') + ':' + match[2];
     }
   }
-  return null;
-}
 
-// ─── Helper: re-number trades after a deletion ─────────────────────────────
-function renumberTrades(sheet) {
-  var lastRow = sheet.getLastRow();
-  for (var i = 2; i <= lastRow; i++) {
-    sheet.getRange(i, COL.TRADE_NUMBER).setValue(i - 1);
-  }
-}
-
-// ─── Helper: format a time value from the sheet ────────────────────────────
-function formatTime(val) {
-  if (!val) return '12:00';
-
-  // If it's a Date object (Google Sheets stores times as Date)
-  if (val instanceof Date) {
-    var h = val.getHours().toString().padStart(2, '0');
-    var m = val.getMinutes().toString().padStart(2, '0');
-    return h + ':' + m;
+  // 2. If it is a Date object, use Spreadsheet timezone
+  if (rawVal instanceof Date) {
+    try {
+      return Utilities.formatDate(rawVal, tz || 'UTC', 'HH:mm');
+    } catch (e) {
+      var h = rawVal.getHours().toString().padStart(2, '0');
+      var m = rawVal.getMinutes().toString().padStart(2, '0');
+      return h + ':' + m;
+    }
   }
 
-  // If it's a string like "14:30"
-  var s = String(val).trim();
-  var match = s.match(/(\d{1,2}):(\d{2})/);
-  if (match) {
-    return match[1].padStart(2, '0') + ':' + match[2];
+  // 3. String match fallback
+  if (rawVal) {
+    var m2 = String(rawVal).trim().match(/(\d{1,2}):(\d{2})/);
+    if (m2) return m2[1].padStart(2, '0') + ':' + m2[2];
   }
 
   return '12:00';
 }
 
-// ─── Helper: format a date value from the sheet ────────────────────────────
-function formatDate(val) {
-  if (!val) return '';
-
-  if (val instanceof Date) {
-    var y = val.getFullYear();
-    var mo = (val.getMonth() + 1).toString().padStart(2, '0');
-    var d = val.getDate().toString().padStart(2, '0');
-    return y + '-' + mo + '-' + d;
+function formatDate(rawVal, displayVal, tz) {
+  if (rawVal instanceof Date) {
+    try {
+      return Utilities.formatDate(rawVal, tz || 'UTC', 'yyyy-MM-dd');
+    } catch (e) {}
   }
 
-  return String(val).trim();
+  var s = String(displayVal || rawVal || '').trim();
+  if (s.indexOf('/') !== -1) {
+    var parts = s.split('/');
+    if (parts.length === 3) {
+      var mo = parts[0].padStart(2, '0');
+      var da = parts[1].padStart(2, '0');
+      var yr = parts[2];
+      if (yr.length === 2) yr = '20' + yr;
+      return yr + '-' + mo + '-' + da;
+    }
+  }
+  return s;
 }
 
-// ─── Helper: return JSON response ──────────────────────────────────────────
+function formatTimeStr(val) {
+  var match = String(val || '').match(/(\d{1,2}):(\d{2})/);
+  if (match) return match[1].padStart(2, '0') + ':' + match[2];
+  return '12:00';
+}
+
+// ─── Helpers: Row Locators ────────────────────────────────────────────────
+function findHeaderRow(sheet) {
+  var data = sheet.getRange(1, 1, Math.min(sheet.getLastRow(), 10), 5).getValues();
+  for (var r = 0; r < data.length; r++) {
+    var rowStr = data[r].map(String).join(' ').toUpperCase();
+    if (rowStr.indexOf('PAIR') !== -1) {
+      return r + 1; // 1-indexed
+    }
+  }
+  return 3;
+}
+
+function findRowByTradeNumber(sheet, headerRow, tradeNum) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= headerRow) return null;
+
+  var colA = sheet.getRange(headerRow + 1, COL.TRADE_NUMBER, lastRow - headerRow, 1).getValues();
+  for (var i = 0; i < colA.length; i++) {
+    if (parseInt(colA[i][0], 10) === parseInt(tradeNum, 10)) {
+      return headerRow + 1 + i;
+    }
+  }
+  return null;
+}
+
+function findNextTradeNumber(sheet, headerRow) {
+  var lastRow = sheet.getLastRow();
+  var maxNum = 0;
+  if (lastRow > headerRow) {
+    var colA = sheet.getRange(headerRow + 1, COL.TRADE_NUMBER, lastRow - headerRow, 1).getValues();
+    for (var i = 0; i < colA.length; i++) {
+      var n = parseInt(colA[i][0], 10);
+      if (!isNaN(n) && n > maxNum) maxNum = n;
+    }
+  }
+  return maxNum + 1;
+}
+
+function findNextAvailableRow(sheet, headerRow) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= headerRow) return headerRow + 1;
+
+  var pairs = sheet.getRange(headerRow + 1, COL.PAIR, lastRow - headerRow, 1).getValues();
+  for (var i = 0; i < pairs.length; i++) {
+    var p = String(pairs[i][0] || '').trim();
+    if (!p) return headerRow + 1 + i;
+  }
+  return lastRow + 1;
+}
+
+function renumberTrades(sheet, headerRow) {
+  var lastRow = sheet.getLastRow();
+  var num = 1;
+  for (var r = headerRow + 1; r <= lastRow; r++) {
+    var pair = String(sheet.getRange(r, COL.PAIR).getValue() || '').trim();
+    if (pair) {
+      sheet.getRange(r, COL.TRADE_NUMBER).setValue(num);
+      num++;
+    }
+  }
+}
+
 function jsonResponse(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
@@ -247,18 +429,14 @@ function jsonResponse(obj) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  AUTO-SYNC SECTION — fires on every sheet edit → pushes to website
+//  AUTO-SYNC TRIGGER — on every sheet edit → pushes changes to backend
 // ══════════════════════════════════════════════════════════════════════════
 
-/**
- * Called automatically on every edit.
- * Run installTrigger() once to register this.
- */
 function onSheetEdit(e) {
   if (e && e.oldValue === e.value) return;
 
   var lock = LockService.getScriptLock();
-  var acquired = lock.tryLock(500);
+  var acquired = lock.tryLock(1000);
   if (!acquired) return;
 
   try {
@@ -283,16 +461,16 @@ function executeSyncToBackend() {
     var result = JSON.parse(response.getContentText());
 
     if (code === 200 || code === 201) {
-      console.log('Auto-sync: ' + (result.inserted||0) + ' added, ' + (result.updated||0) + ' updated, ' + (result.deleted||0) + ' deleted');
+      console.log('✅ Auto-sync success: ' + (result.inserted||0) + ' added, ' + (result.updated||0) + ' updated');
     } else {
-      console.error('Auto-sync failed HTTP ' + code);
+      console.error('❌ Auto-sync failed HTTP ' + code);
     }
   } catch (err) {
     console.error('Auto-sync error:', err.message);
   }
 }
 
-// ─── Run this ONCE to install the onEdit trigger ───────────────────────────
+// ─── Run this ONCE to install the trigger ─────────────────────────────────
 function installTrigger() {
   var triggers = ScriptApp.getProjectTriggers();
   for (var i = 0; i < triggers.length; i++) {
@@ -306,12 +484,12 @@ function installTrigger() {
     .onEdit()
     .create();
 
-  SpreadsheetApp.getUi().alert('✅ Auto-Sync Enabled!\n\nEvery sheet edit now auto-syncs to the website.');
+  SpreadsheetApp.getUi().alert('✅ Auto-Sync Enabled!\n\nEvery edit in this Google Sheet will now automatically sync to your website in real-time.');
 }
 
 function manualSync() {
   executeSyncToBackend();
-  SpreadsheetApp.getUi().alert('✅ Manual sync done!');
+  SpreadsheetApp.getUi().alert('✅ Manual sync sent to website!');
 }
 
 function checkTriggerStatus() {
