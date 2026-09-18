@@ -11,6 +11,7 @@ import {
   exportTradesToExcel,
   sseStream,
   syncFromGoogleSheet,
+  autoSyncFromSheet,
   requireAdminPin,
   verifyAdminPin,
 } from '../controllers/tradeController.js';
@@ -23,6 +24,10 @@ router.get('/',                   getTrades);           // View all trades
 router.get('/export',             exportTradesToExcel); // Download trades as .xlsx
 router.get('/:id',                getTradeById);        // View single trade details
 router.post('/verify-pin',        verifyAdminPin);      // Verify Owner PIN
+
+// ── Auto-sync Webhook (called by Google Apps Script onEdit trigger) ───────────
+// Auth via ?secret=<SHEET_WEBHOOK_SECRET> — no browser PIN needed (machine-to-machine)
+router.post('/sheet-webhook',     autoSyncFromSheet);
 
 // ── Owner Protected Routes (Require Owner PIN) ────────────────────────────────
 router.post('/',                  requireAdminPin, createTrade);         // Add single trade

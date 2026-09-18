@@ -661,6 +661,10 @@ export const syncFromGoogleSheet = async (req, res) => {
         time: timeStr,
         profitR: t.profitR,
         riskPercent: t.riskPercent,
+        // ── Preserve financial fields so accountBalance is never wiped ──
+        ...(t.riskDollar !== undefined && { riskDollar: t.riskDollar }),
+        ...(t.accountBalance !== undefined && t.accountBalance !== null && t.accountBalance !== ''
+          && { accountBalance: parseFloat(t.accountBalance) }),
         result: t.result,
         entryType: t.entryType,
         imageUrl: t.imageUrl || '',
@@ -677,3 +681,73 @@ export const syncFromGoogleSheet = async (req, res) => {
   }
 };
 
+// ─── POST /api/v1/trades/sheet-webhook ───────────────────────────────────────
+// Called automatically by Google Apps Script onEdit trigger.
+// Auth: ?secret=<SHEET_WEBHOOK_SECRET> query param (no browser PIN needed).
+// Google Apps Script sends the FULL sheet as JSON so we reconcile it.
+export const autoSyncFromSheet = async (req, res) => {
+  const expectedSecret = process.env.SHEET_WEBHOOK_SECRET;
+  const { secret } = req.query;
+
+  if (!expectedSecret || secret !== expectedSecret) {
+    return res.status(403).json({ success: false, message: 'Invalid or missing webhook secret.' });
+  }
+
+  const webhookUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL;
+  if (!webhookUrl) {
+    return res.status(400).json({
+      success: false,
+      message: 'GOOGLE_SHEET_WEBHOOK_URL is not configured.',
+    });
+  }
+
+  try {
+    console.log('🔔 Auto-sync triggered by Google Apps Script...');
+
+    // Re-use the same pull-and-reconcile logic as syncFromGoogleSheet
+    const response = await fetch(webhookUrl);
+    const data = await response.json();
+
+    if (!data.success || !Array.isArray(data.trades)) {
+      return res.status(502).json({
+        success: false,
+        message: 'Failed to fetch trades from Google Sheet.',
+      });
+    }
+
+    const tradesData = data.trades.map((t) => {
+      let timeStr = String(t.time || '12:00').trim();
+      const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
+      if (timeMatch) timeStr = `${String(timeMatch[1]).padStart(2, '0')}:${timeMatch[2]}`;
+
+      let dateVal = t.date;
+      if (typeof dateVal === 'string' && dateVal.includes('GMT')) {
+        const parsed = new Date(dateVal);
+        if (!isNaN(parsed.getTime())) dateVal = parsed.toISOString().split('T')[0];
+      }
+
+      return {
+        tradeNumber: t.tradeNumber,
+        pair: t.pair,
+        date: dateVal,
+        time: timeStr,
+        profitR: t.profitR,
+        riskPercent: t.riskPercent,
+        ...(t.riskDollar !== undefined && { riskDollar: t.riskDollar }),
+        ...(t.accountBalance !== undefined && t.accountBalance !== null && t.accountBalance !== ''
+          && { accountBalance: parseFloat(t.accountBalance) }),
+        result: t.result,
+        entryType: t.entryType,
+        imageUrl: t.imageUrl || '',
+        notes: t.notes || '',
+      };
+    });
+
+    console.log(`📊 Auto-sync: ${tradesData.length} trades from Google Sheet. Reconciling...`);
+    req.body = tradesData;
+    return reconcileTrades(req, res);
+  } catch (err) {
+    console.error('❌ Auto-sync error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

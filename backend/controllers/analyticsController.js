@@ -24,10 +24,10 @@ export const getKPIs = async (req, res) => {
     const wins = trades.filter((t) => t.result === 'TP');
     const losses = trades.filter((t) => t.result === 'SL');
 
-    const totalR = trades.reduce((sum, t) => sum + t.profitR, 0);
+    const totalR = trades.reduce((sum, t) => sum + (t.profitR || 0), 0);
     const winRate = calculateWinRate(wins.length, losses.length);
 
-    // Calculate true initial starting balance BEFORE the first trade took place
+    // Find the first trade with a valid accountBalance for starting balance calc
     const firstTrade = trades[0];
     const firstTradePnl =
       firstTrade.result === 'TP'
@@ -37,18 +37,28 @@ export const getKPIs = async (req, res) => {
           : 0;
 
     // Round to nearest 50 multiplier (e.g. $4,998 -> $5,000 exact starting capital)
-    const rawStarting = firstTrade.accountBalance - firstTradePnl;
+    const rawStarting = (firstTrade.accountBalance || 0) - firstTradePnl;
     const startingBalance = Math.round(rawStarting / 50) * 50;
-    const currentBalance = trades[trades.length - 1].accountBalance;
+
+    // Find last trade with a defined accountBalance (some may be undefined if not in sheet)
+    let currentBalance = 0;
+    for (let i = trades.length - 1; i >= 0; i--) {
+      if (trades[i].accountBalance != null && !isNaN(trades[i].accountBalance)) {
+        currentBalance = trades[i].accountBalance;
+        break;
+      }
+    }
+
     const totalDollarGain = currentBalance - startingBalance;
 
-    // Max Drawdown % — peak-to-trough on running account balance
+    // Max Drawdown % — peak-to-trough on running account balance (skip undefined)
     let peak = startingBalance;
     let maxDrawdown = 0;
     trades.forEach((t) => {
       const bal = t.accountBalance;
+      if (bal == null || isNaN(bal)) return; // skip trades without a balance
       if (bal > peak) peak = bal;
-      const drawdown = ((peak - bal) / peak) * 100;
+      const drawdown = peak > 0 ? ((peak - bal) / peak) * 100 : 0;
       if (drawdown > maxDrawdown) maxDrawdown = drawdown;
     });
 
@@ -87,6 +97,7 @@ export const getKPIs = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 // ─── GET /api/v1/analytics/best-bad-days ─────────────────────────────────────
 export const getBestBadDays = async (req, res) => {
