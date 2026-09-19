@@ -1,4 +1,5 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import ImageUploader from './ImageUploader';
 
@@ -75,7 +76,6 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess, tradeToEdit = null }) => {
     if (!isOpen) return;
 
     if (tradeToEdit) {
-      // Editing existing trade
       let formattedDate = '';
       if (tradeToEdit.date) {
         formattedDate = String(tradeToEdit.date).split('T')[0];
@@ -98,7 +98,6 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess, tradeToEdit = null }) => {
       setIsEditingBalance(true);
       setFetchingBalance(false);
     } else {
-      // Creating new trade: fetch last trade account balance
       setForm(INITIAL_FORM);
       setIsEditingBalance(false);
       setRiskDollarManual(false);
@@ -239,11 +238,14 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess, tradeToEdit = null }) => {
     }
   };
 
-  return (
-    <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+  return createPortal(
+    <div
+      className="modal-backdrop !fixed !inset-0 !z-[9999] flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div
         ref={modalRef}
-        className="relative w-full max-w-2xl mx-4 bg-[#111827] border border-slate-800 rounded-2xl shadow-2xl shadow-black/50 animate-slide-in-up overflow-hidden max-h-[90vh] flex flex-col"
+        className="relative w-full max-w-2xl bg-[#111827] border border-slate-800 rounded-2xl shadow-2xl shadow-black/80 animate-slide-in-up overflow-hidden max-h-[90vh] flex flex-col"
       >
         {/* Header gradient bar */}
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 via-violet-500 to-pink-500" />
@@ -280,204 +282,207 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess, tradeToEdit = null }) => {
           </button>
         </div>
 
-        {/* Form Body (Scrollable) */}
-        <form onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto space-y-4">
-          {/* Row 1: Pair, Date, Time */}
-          <div className="grid grid-cols-3 gap-4">
-            <InputField label="Pair" id="pair" placeholder="EURUSD" value={form.pair} onChange={set('pair')} required />
-            <InputField label="Date" id="date" type="date" value={form.date} onChange={set('date')} required />
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="time" className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Time (UTC) <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="time"
-                  type="time"
-                  value={form.time}
-                  onChange={set('time')}
-                  required
-                  className="w-full h-9 px-3 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-100 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all input-glow"
-                />
-                {session && (
-                  <span className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold ${SESSION_COLORS[session] || 'text-slate-400'}`}>
-                    {session}
-                  </span>
-                )}
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          {/* Scrollable Fields */}
+          <div className="px-6 py-5 overflow-y-auto space-y-4 flex-1">
+            {/* Row 1: Pair, Date, Time */}
+            <div className="grid grid-cols-3 gap-4">
+              <InputField label="Pair" id="pair" placeholder="EURUSD" value={form.pair} onChange={set('pair')} required />
+              <InputField label="Date" id="date" type="date" value={form.date} onChange={set('date')} required />
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="time" className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Time (UTC) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="time"
+                    type="time"
+                    value={form.time}
+                    onChange={set('time')}
+                    required
+                    className="w-full h-9 px-3 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-100 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all input-glow"
+                  />
+                  {session && (
+                    <span className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold ${SESSION_COLORS[session] || 'text-slate-400'}`}>
+                      {session}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Row 2: Account Balance, Risk %, Risk $ */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Account Balance ($)
-                </label>
-                <div className="flex items-center gap-1.5">
-                  {!isEditingBalance && form.accountBalance !== '' && (
+            {/* Row 2: Account Balance, Risk %, Risk $ */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                    Account Balance ($)
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    {!isEditingBalance && form.accountBalance !== '' && (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingBalance(true)}
+                        className="text-[10px] text-slate-500 hover:text-slate-300 underline transition-colors"
+                        title="Click to override balance"
+                      >
+                        Edit
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {isEditingBalance ? (
+                  <input
+                    id="accountBalance"
+                    type="number"
+                    placeholder="10000"
+                    value={form.accountBalance}
+                    onChange={set('accountBalance')}
+                    className="h-9 px-3 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-100 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all input-glow"
+                  />
+                ) : (
+                  <div className="h-9 px-3 rounded-lg bg-slate-900 border border-slate-800 text-sm flex items-center justify-between">
+                    {fetchingBalance ? (
+                      <span className="text-slate-500 italic flex items-center gap-1.5 text-xs">
+                        <svg className="w-3 h-3 animate-spin text-cyan-400" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Fetching...
+                      </span>
+                    ) : form.accountBalance !== '' ? (
+                      <span className="text-emerald-400 font-semibold font-mono-nums">
+                        ${Number(form.accountBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    ) : (
+                      <span className="text-slate-600 italic">No previous balance</span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <InputField label="Risk %" id="riskPercent" type="number" step="any" placeholder="1.0" value={form.riskPercent} onChange={set('riskPercent')} required />
+
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Risk $</label>
+                  {!riskDollarManual && riskDollarAuto && (
+                    <span className="text-[10px] text-cyan-500 font-semibold bg-cyan-500/10 px-1.5 py-0.5 rounded">auto</span>
+                  )}
+                  {riskDollarManual && (
                     <button
                       type="button"
-                      onClick={() => setIsEditingBalance(true)}
-                      className="text-[10px] text-slate-500 hover:text-slate-300 underline transition-colors"
-                      title="Click to override balance"
+                      onClick={() => {
+                        setRiskDollarManual(false);
+                        setForm((f) => ({ ...f, riskDollar: riskDollarAuto || '' }));
+                      }}
+                      className="text-[10px] text-slate-500 hover:text-cyan-400 underline transition-colors"
                     >
-                      Edit
+                      Reset to auto
                     </button>
                   )}
                 </div>
-              </div>
-
-              {isEditingBalance ? (
                 <input
-                  id="accountBalance"
+                  id="riskDollar"
                   type="number"
-                  placeholder="10000"
-                  value={form.accountBalance}
-                  onChange={set('accountBalance')}
-                  className="h-9 px-3 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-100 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all input-glow"
+                  step="any"
+                  placeholder={riskDollarAuto ? riskDollarAuto : 'e.g. 50'}
+                  value={form.riskDollar}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setRiskDollarManual(val !== '');
+                    setForm((f) => ({ ...f, riskDollar: val }));
+                  }}
+                  className={`h-9 px-3 rounded-lg bg-slate-800/80 border text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all input-glow ${
+                    riskDollarManual
+                      ? 'border-amber-500/60 focus:border-amber-400'
+                      : 'border-slate-700 focus:border-blue-500'
+                  }`}
                 />
-              ) : (
-                <div className="h-9 px-3 rounded-lg bg-slate-900 border border-slate-800 text-sm flex items-center justify-between">
-                  {fetchingBalance ? (
-                    <span className="text-slate-500 italic flex items-center gap-1.5 text-xs">
-                      <svg className="w-3 h-3 animate-spin text-cyan-400" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Fetching...
-                    </span>
-                  ) : form.accountBalance !== '' ? (
-                    <span className="text-emerald-400 font-semibold font-mono-nums">
-                      ${Number(form.accountBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  ) : (
-                    <span className="text-slate-600 italic">No previous balance</span>
-                  )}
-                </div>
-              )}
+              </div>
             </div>
 
-            <InputField label="Risk %" id="riskPercent" type="number" step="any" placeholder="1.0" value={form.riskPercent} onChange={set('riskPercent')} required />
+            {/* Row 3: Profit R, Result, Entry Type */}
+            <div className="grid grid-cols-3 gap-4">
+              <InputField label="Profit R" id="profitR" type="number" step="any" placeholder="+2.5 or -1" value={form.profitR} onChange={set('profitR')} required />
 
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Risk $</label>
-                {!riskDollarManual && riskDollarAuto && (
-                  <span className="text-[10px] text-cyan-500 font-semibold bg-cyan-500/10 px-1.5 py-0.5 rounded">auto</span>
-                )}
-                {riskDollarManual && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRiskDollarManual(false);
-                      setForm((f) => ({ ...f, riskDollar: riskDollarAuto || '' }));
-                    }}
-                    className="text-[10px] text-slate-500 hover:text-cyan-400 underline transition-colors"
-                  >
-                    Reset to auto
-                  </button>
-                )}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Result <span className="text-rose-500">*</span>
+                </label>
+                <div className="flex gap-1.5 h-9">
+                  {['TP', 'SL', 'BE'].map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, result: r }))}
+                      className={`flex-1 rounded-lg text-sm font-semibold border transition-all ${
+                        form.result === r
+                          ? r === 'TP'
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                            : r === 'SL'
+                            ? 'bg-rose-500/20 border-rose-500/50 text-rose-400'
+                            : 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                          : 'bg-slate-800/60 border-slate-700 text-slate-500 hover:border-slate-600'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <input
-                id="riskDollar"
-                type="number"
-                step="any"
-                placeholder={riskDollarAuto ? riskDollarAuto : 'e.g. 50'}
-                value={form.riskDollar}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setRiskDollarManual(val !== '');
-                  setForm((f) => ({ ...f, riskDollar: val }));
-                }}
-                className={`h-9 px-3 rounded-lg bg-slate-800/80 border text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all input-glow ${
-                  riskDollarManual
-                    ? 'border-amber-500/60 focus:border-amber-400'
-                    : 'border-slate-700 focus:border-blue-500'
-                }`}
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Entry Type <span className="text-rose-500">*</span>
+                </label>
+                <div className="flex gap-1.5 h-9">
+                  {['Long', 'Short'].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, entryType: t }))}
+                      className={`flex-1 rounded-lg text-sm font-semibold border transition-all ${
+                        form.entryType === t
+                          ? t === 'Long'
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                            : 'bg-rose-500/20 border-rose-500/50 text-rose-400'
+                          : 'bg-slate-800/60 border-slate-700 text-slate-500 hover:border-slate-600'
+                      }`}
+                    >
+                      {t === 'Long' ? '▲ Long' : '▼ Short'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Row 4: Image Uploader */}
+            <ImageUploader
+              value={form.imageUrl}
+              onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
+            />
+
+            {/* Notes */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="notes" className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                Notes
+              </label>
+              <textarea
+                id="notes"
+                rows={2}
+                placeholder="Setup description, observations..."
+                value={form.notes}
+                onChange={set('notes')}
+                className="px-3 py-2 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-100 text-sm placeholder-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all resize-none input-glow"
               />
             </div>
           </div>
 
-          {/* Row 3: Profit R, Result, Entry Type */}
-          <div className="grid grid-cols-3 gap-4">
-            <InputField label="Profit R" id="profitR" type="number" step="any" placeholder="+2.5 or -1" value={form.profitR} onChange={set('profitR')} required />
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Result <span className="text-rose-500">*</span>
-              </label>
-              <div className="flex gap-1.5 h-9">
-                {['TP', 'SL', 'BE'].map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, result: r }))}
-                    className={`flex-1 rounded-lg text-sm font-semibold border transition-all ${
-                      form.result === r
-                        ? r === 'TP'
-                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                          : r === 'SL'
-                          ? 'bg-rose-500/20 border-rose-500/50 text-rose-400'
-                          : 'bg-amber-500/20 border-amber-500/50 text-amber-400'
-                        : 'bg-slate-800/60 border-slate-700 text-slate-500 hover:border-slate-600'
-                    }`}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Entry Type <span className="text-rose-500">*</span>
-              </label>
-              <div className="flex gap-1.5 h-9">
-                {['Long', 'Short'].map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, entryType: t }))}
-                    className={`flex-1 rounded-lg text-sm font-semibold border transition-all ${
-                      form.entryType === t
-                        ? t === 'Long'
-                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                          : 'bg-rose-500/20 border-rose-500/50 text-rose-400'
-                        : 'bg-slate-800/60 border-slate-700 text-slate-500 hover:border-slate-600'
-                    }`}
-                  >
-                    {t === 'Long' ? '▲ Long' : '▼ Short'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Row 4: Image Uploader (Device Upload + URL paste) */}
-          <ImageUploader
-            value={form.imageUrl}
-            onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
-          />
-
-          {/* Notes */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="notes" className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-              Notes
-            </label>
-            <textarea
-              id="notes"
-              rows={2}
-              placeholder="Setup description, observations..."
-              value={form.notes}
-              onChange={set('notes')}
-              className="px-3 py-2 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-100 text-sm placeholder-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all resize-none input-glow"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-2">
+          {/* Sticky Actions Footer */}
+          <div className="flex gap-3 px-6 py-4 border-t border-slate-800 bg-slate-900/80 flex-shrink-0">
             <button
               type="button"
               onClick={onClose}
@@ -508,7 +513,8 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess, tradeToEdit = null }) => {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
