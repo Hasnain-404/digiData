@@ -80,10 +80,12 @@ const MonthlyReturnsMatrix = () => {
                 <td className="p-3 text-left font-bold text-white bg-slate-900/40">{row.year}</td>
 
                 {row.months.map((cell) => {
+                  const pctVal = typeof cell.pct === 'number' && !isNaN(cell.pct) ? cell.pct : 0;
+                  const amtVal = typeof cell.amount === 'number' && !isNaN(cell.amount) ? cell.amount : 0;
                   const isZero = cell.trades === 0;
-                  const isProfit = cell.pct > 0;
+                  const isProfit = pctVal > 0;
 
-                  const intensity = Math.min(Math.abs(cell.pct) / 10, 1);
+                  const intensity = Math.min(Math.abs(pctVal) / 10, 1);
                   const bgStyle = isZero
                     ? {}
                     : isProfit
@@ -98,12 +100,12 @@ const MonthlyReturnsMatrix = () => {
                         <div>
                           {(viewMode === 'Percent' || viewMode === 'All') && (
                             <div className={`font-bold ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {isProfit ? '+' : ''}{cell.pct.toFixed(2)}%
+                              {isProfit ? '+' : ''}{pctVal.toFixed(2)}%
                             </div>
                           )}
                           {(viewMode === 'Profit' || viewMode === 'All') && (
                             <div className={`text-[10px] ${isProfit ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>
-                              {cell.amount >= 0 ? '+$' : '-$'}{Math.abs(cell.amount).toFixed(0)}
+                              {amtVal >= 0 ? '+$' : '-$'}{Math.abs(amtVal).toFixed(0)}
                             </div>
                           )}
                           {viewMode === 'All' && (
@@ -117,15 +119,23 @@ const MonthlyReturnsMatrix = () => {
 
                 {/* YTD Total */}
                 <td className="p-2 font-mono bg-slate-950/60 leading-tight">
-                  <div className={`font-extrabold text-xs ${row.ytdPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {row.ytdPct >= 0 ? '+' : ''}{row.ytdPct.toFixed(2)}%
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-medium">
-                    {row.ytdTrades} trades
-                  </div>
-                  <div className={`text-[10px] font-mono ${row.ytdAmount >= 0 ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>
-                    {row.ytdAmount >= 0 ? '+$' : '-$'}{Math.abs(row.ytdAmount).toFixed(0)}
-                  </div>
+                  {(() => {
+                    const ytdPctVal = typeof row.ytdPct === 'number' && !isNaN(row.ytdPct) ? row.ytdPct : 0;
+                    const ytdAmtVal = typeof row.ytdAmount === 'number' && !isNaN(row.ytdAmount) ? row.ytdAmount : 0;
+                    return (
+                      <>
+                        <div className={`font-extrabold text-xs ${ytdPctVal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {ytdPctVal >= 0 ? '+' : ''}{ytdPctVal.toFixed(2)}%
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-medium">
+                          {row.ytdTrades || 0} trades
+                        </div>
+                        <div className={`text-[10px] font-mono ${ytdAmtVal >= 0 ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>
+                          {ytdAmtVal >= 0 ? '+$' : '-$'}{Math.abs(ytdAmtVal).toFixed(0)}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </td>
               </tr>
             ))}

@@ -51,7 +51,7 @@ data.trades.slice(0, 5).forEach(t => {
 console.log('\nNow triggering full sync via local backend...');
 
 // ── Hit the local backend sync endpoint ────────────────────────────────────
-const ADMIN_PIN = process.env.ADMIN_PIN || '1234';
+const ADMIN_PIN = process.env.ADMIN_PIN || '0529';
 
 const syncRes = await fetch('http://localhost:5000/api/v1/trades/sync-google-sheet', {
   method: 'POST',

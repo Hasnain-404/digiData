@@ -318,8 +318,8 @@ export const getMonthlyReturns = async (req, res) => {
         : firstTrade.result === 'SL'
           ? -(firstTrade.riskDollar || 0)
           : 0;
-    const rawStarting = firstTrade.accountBalance - firstTradePnl;
-    const startingBalance = Math.round(rawStarting / 50) * 50;
+    const rawStarting = (firstTrade.accountBalance || 5000) - firstTradePnl;
+    const startingBalance = (rawStarting > 0) ? Math.round(rawStarting / 50) * 50 : 5000;
 
     const matrix = Object.keys(yearMonthMap)
       .sort()
@@ -327,17 +327,20 @@ export const getMonthlyReturns = async (req, res) => {
         const months = MONTHS.map((month, idx) => {
           const cell = yearMonthMap[year][idx];
           if (!cell) return { month, pct: 0, amount: 0, trades: 0 };
+          const pnlVal = typeof cell.dollarPnl === 'number' && !isNaN(cell.dollarPnl) ? cell.dollarPnl : 0;
+          const pctVal = startingBalance > 0 ? parseFloat(((pnlVal / startingBalance) * 100).toFixed(2)) : 0;
           return {
             month,
-            pct: parseFloat(((cell.dollarPnl / startingBalance) * 100).toFixed(2)),
-            amount: parseFloat(cell.dollarPnl.toFixed(2)),
+            pct: isNaN(pctVal) ? 0 : pctVal,
+            amount: parseFloat(pnlVal.toFixed(2)),
             trades: cell.trades,
           };
         });
 
-        const ytdAmount = months.reduce((s, m) => s + m.amount, 0);
-        const ytdTrades = months.reduce((s, m) => s + m.trades, 0);
-        const ytdPct = parseFloat(((ytdAmount / startingBalance) * 100).toFixed(2));
+        const ytdAmount = months.reduce((s, m) => s + (m.amount || 0), 0);
+        const ytdTrades = months.reduce((s, m) => s + (m.trades || 0), 0);
+        const rawYtdPct = startingBalance > 0 ? parseFloat(((ytdAmount / startingBalance) * 100).toFixed(2)) : 0;
+        const ytdPct = isNaN(rawYtdPct) ? 0 : rawYtdPct;
 
         return {
           year: parseInt(year),
