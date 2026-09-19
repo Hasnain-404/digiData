@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
+import ImageUploader from './ImageUploader';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL
   ? `${import.meta.env.VITE_BACKEND_URL}/api/v1`
   : 'https://digidata.onrender.com/api/v1';
 
-// ── Session detection (mirrors backend logic) ─────────────────────────────────
+// Session detection (mirrors backend logic)
 function detectSession(timeStr) {
   if (!timeStr) return '';
   const [h, m] = timeStr.split(':').map(Number);
@@ -58,7 +59,8 @@ const InputField = ({ label, id, type = 'text', placeholder, value, onChange, re
   </div>
 );
 
-const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
+const TradeModalForm = ({ isOpen, onClose, onSuccess, tradeToEdit = null }) => {
+  const isEditMode = Boolean(tradeToEdit);
   const [form, setForm] = useState(INITIAL_FORM);
   const [session, setSession] = useState('');
   const [riskDollarAuto, setRiskDollarAuto] = useState(null); // auto-calculated value
@@ -68,50 +70,78 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
   const [isEditingBalance, setIsEditingBalance] = useState(false);
   const modalRef = useRef(null);
 
-  // Auto-fetch previous trade account balance when modal opens
+  // Initialize or populate form state
   useEffect(() => {
     if (!isOpen) return;
 
-    let isMounted = true;
-    setIsEditingBalance(false);
-
-    const fetchPrevBalance = async () => {
-      setFetchingBalance(true);
-      try {
-        const res = await fetch(`${API_BASE}/trades?limit=1&sortBy=date&order=desc`);
-        const data = await res.json();
-        if (data.success && data.data && data.data.length > 0) {
-          const lastBal = data.data[0].accountBalance;
-          if (isMounted && lastBal != null) {
-            setForm((f) => ({ ...f, accountBalance: lastBal }));
-            setFetchingBalance(false);
-            return;
-          }
-        }
-
-        const kpiRes = await fetch(`${API_BASE}/analytics/kpis`);
-        const kpiData = await kpiRes.json();
-        if (kpiData.success && kpiData.data) {
-          const bal = kpiData.data.currentBalance || kpiData.data.startingBalance;
-          if (isMounted && bal != null && bal > 0) {
-            setForm((f) => ({ ...f, accountBalance: bal }));
-            setFetchingBalance(false);
-            return;
-          }
-        }
-      } catch (err) {
-        // Ignore network errors in demo/offline mode
+    if (tradeToEdit) {
+      // Editing existing trade
+      let formattedDate = '';
+      if (tradeToEdit.date) {
+        formattedDate = String(tradeToEdit.date).split('T')[0];
       }
+      setForm({
+        pair: tradeToEdit.pair || '',
+        time: tradeToEdit.time || '',
+        date: formattedDate || new Date().toISOString().split('T')[0],
+        profitR: tradeToEdit.profitR != null ? String(tradeToEdit.profitR) : '',
+        riskPercent: tradeToEdit.riskPercent != null ? String(tradeToEdit.riskPercent) : '',
+        riskDollar: tradeToEdit.riskDollar != null ? String(tradeToEdit.riskDollar) : '',
+        accountBalance: tradeToEdit.accountBalance != null ? String(tradeToEdit.accountBalance) : '',
+        result: tradeToEdit.result || 'TP',
+        entryType: tradeToEdit.entryType || 'Long',
+        imageUrl: tradeToEdit.imageUrl || '',
+        notes: tradeToEdit.notes || '',
+      });
+      setSession(tradeToEdit.session || (tradeToEdit.time ? detectSession(tradeToEdit.time) : ''));
+      setRiskDollarManual(tradeToEdit.riskDollar != null && tradeToEdit.riskDollar !== '');
+      setIsEditingBalance(true);
+      setFetchingBalance(false);
+    } else {
+      // Creating new trade: fetch last trade account balance
+      setForm(INITIAL_FORM);
+      setIsEditingBalance(false);
+      setRiskDollarManual(false);
 
-      if (isMounted) setFetchingBalance(false);
-    };
+      let isMounted = true;
+      const fetchPrevBalance = async () => {
+        setFetchingBalance(true);
+        try {
+          const res = await fetch(`${API_BASE}/trades?limit=1&sortBy=date&order=desc`);
+          const data = await res.json();
+          if (data.success && data.data && data.data.length > 0) {
+            const lastBal = data.data[0].accountBalance;
+            if (isMounted && lastBal != null) {
+              setForm((f) => ({ ...f, accountBalance: String(lastBal) }));
+              setFetchingBalance(false);
+              return;
+            }
+          }
 
-    fetchPrevBalance();
+          const kpiRes = await fetch(`${API_BASE}/analytics/kpis`);
+          const kpiData = await kpiRes.json();
+          if (kpiData.success && kpiData.data) {
+            const bal = kpiData.data.currentBalance || kpiData.data.startingBalance;
+            if (isMounted && bal != null && bal > 0) {
+              setForm((f) => ({ ...f, accountBalance: String(bal) }));
+              setFetchingBalance(false);
+              return;
+            }
+          }
+        } catch (err) {
+          // Ignore network errors in demo/offline mode
+        }
 
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen]);
+        if (isMounted) setFetchingBalance(false);
+      };
+
+      fetchPrevBalance();
+
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [isOpen, tradeToEdit]);
 
   // Auto-detect session from time
   useEffect(() => {
@@ -119,7 +149,7 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
     else setSession('');
   }, [form.time]);
 
-  // Auto-calculate Risk $ — only write to form if user hasn't manually overridden it
+  // Auto-calculate Risk $
   useEffect(() => {
     const bal = parseFloat(form.accountBalance);
     const risk = parseFloat(form.riskPercent);
@@ -161,23 +191,37 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/trades`, {
-        method: 'POST',
+      const pin = localStorage.getItem('digidata_owner_pin') || '';
+      const payload = {
+        ...form,
+        profitR: parseFloat(form.profitR),
+        riskPercent: parseFloat(form.riskPercent),
+        accountBalance: parseFloat(form.accountBalance),
+        riskDollar: form.riskDollar !== '' ? parseFloat(form.riskDollar) : undefined,
+      };
+
+      const url = isEditMode
+        ? `${API_BASE}/trades/${tradeToEdit._id}`
+        : `${API_BASE}/trades`;
+
+      const method = isEditMode ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-pin': localStorage.getItem('digidata_owner_pin') || '',
+          'x-admin-pin': pin,
         },
-        body: JSON.stringify({
-          ...form,
-          profitR: parseFloat(form.profitR),
-          riskPercent: parseFloat(form.riskPercent),
-          accountBalance: parseFloat(form.accountBalance),
-          riskDollar: form.riskDollar !== '' ? parseFloat(form.riskDollar) : undefined,
-        }),
+        body: JSON.stringify(payload),
       });
+
       const data = await res.json();
       if (data.success) {
-        toast.success('Trade logged successfully! 🎯');
+        toast.success(
+          isEditMode
+            ? `Trade #${tradeToEdit.tradeNumber || ''} updated & synced to Sheet! 🚀`
+            : 'Trade logged successfully! 🚀'
+        );
         setForm(INITIAL_FORM);
         setSession('');
         setRiskDollarAuto(null);
@@ -186,7 +230,7 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
         onSuccess?.();
         onClose();
       } else {
-        toast.error(data.message || 'Failed to log trade');
+        toast.error(data.message || (isEditMode ? 'Failed to update trade' : 'Failed to log trade'));
       }
     } catch (err) {
       toast.error('Server error. Is the backend running?');
@@ -199,16 +243,32 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
     <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div
         ref={modalRef}
-        className="relative w-full max-w-2xl mx-4 bg-[#111827] border border-slate-800 rounded-2xl shadow-2xl shadow-black/50 animate-slide-in-up overflow-hidden"
+        className="relative w-full max-w-2xl mx-4 bg-[#111827] border border-slate-800 rounded-2xl shadow-2xl shadow-black/50 animate-slide-in-up overflow-hidden max-h-[90vh] flex flex-col"
       >
         {/* Header gradient bar */}
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 via-violet-500 to-pink-500" />
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-800">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-800 flex-shrink-0">
           <div>
-            <h2 className="text-lg font-bold text-white">New Journal Entry</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Log your trade details below</p>
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              {isEditMode ? (
+                <>
+                  <i className="ri-edit-2-line text-blue-400" />
+                  Edit Trade {tradeToEdit.tradeNumber ? `#${tradeToEdit.tradeNumber}` : ''}
+                </>
+              ) : (
+                <>
+                  <i className="ri-file-add-line text-blue-400" />
+                  New Journal Entry
+                </>
+              )}
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {isEditMode
+                ? 'Update trade details & auto-sync to sheet & database'
+                : 'Log your trade details below'}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -220,10 +280,10 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="px-6 py-5">
+        {/* Form Body (Scrollable) */}
+        <form onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto space-y-4">
           {/* Row 1: Pair, Date, Time */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-3 gap-4">
             <InputField label="Pair" id="pair" placeholder="EURUSD" value={form.pair} onChange={set('pair')} required />
             <InputField label="Date" id="date" type="date" value={form.date} onChange={set('date')} required />
             <div className="flex flex-col gap-1.5">
@@ -248,8 +308,8 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
             </div>
           </div>
 
-          {/* Row 2: Account Balance (auto-fetched), Risk %, Risk $ (auto) */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
+          {/* Row 2: Account Balance, Risk %, Risk $ */}
+          <div className="grid grid-cols-3 gap-4">
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
@@ -261,7 +321,7 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
                       type="button"
                       onClick={() => setIsEditingBalance(true)}
                       className="text-[10px] text-slate-500 hover:text-slate-300 underline transition-colors"
-                      title="Click to override auto-fetched balance"
+                      title="Click to override balance"
                     >
                       Edit
                     </button>
@@ -299,7 +359,7 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
               )}
             </div>
 
-            <InputField label="Risk %" id="riskPercent" type="number" placeholder="1.0" value={form.riskPercent} onChange={set('riskPercent')} required />
+            <InputField label="Risk %" id="riskPercent" type="number" step="any" placeholder="1.0" value={form.riskPercent} onChange={set('riskPercent')} required />
 
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
@@ -323,6 +383,7 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
               <input
                 id="riskDollar"
                 type="number"
+                step="any"
                 placeholder={riskDollarAuto ? riskDollarAuto : 'e.g. 50'}
                 value={form.riskDollar}
                 onChange={(e) => {
@@ -330,100 +391,81 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
                   setRiskDollarManual(val !== '');
                   setForm((f) => ({ ...f, riskDollar: val }));
                 }}
-                className={`h-9 px-3 rounded-lg bg-slate-800/80 border text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all input-glow ${riskDollarManual
-                  ? 'border-amber-500/60 focus:border-amber-400'
-                  : 'border-slate-700 focus:border-blue-500'
-                  }`}
+                className={`h-9 px-3 rounded-lg bg-slate-800/80 border text-sm text-slate-100 placeholder-slate-600 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all input-glow ${
+                  riskDollarManual
+                    ? 'border-amber-500/60 focus:border-amber-400'
+                    : 'border-slate-700 focus:border-blue-500'
+                }`}
               />
             </div>
           </div>
 
           {/* Row 3: Profit R, Result, Entry Type */}
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            <InputField label="Profit R" id="profitR" type="number" placeholder="+2.5 or -1" value={form.profitR} onChange={set('profitR')} required />
+          <div className="grid grid-cols-3 gap-4">
+            <InputField label="Profit R" id="profitR" type="number" step="any" placeholder="+2.5 or -1" value={form.profitR} onChange={set('profitR')} required />
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Result <span className="text-rose-500">*</span></label>
+              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                Result <span className="text-rose-500">*</span>
+              </label>
               <div className="flex gap-1.5 h-9">
                 {['TP', 'SL', 'BE'].map((r) => (
                   <button
-                    key={r} type="button"
+                    key={r}
+                    type="button"
                     onClick={() => setForm((f) => ({ ...f, result: r }))}
-                    className={`flex-1 rounded-lg text-sm font-semibold border transition-all ${form.result === r
-                      ? r === 'TP' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                        : r === 'SL' ? 'bg-rose-500/20 border-rose-500/50 text-rose-400'
+                    className={`flex-1 rounded-lg text-sm font-semibold border transition-all ${
+                      form.result === r
+                        ? r === 'TP'
+                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                          : r === 'SL'
+                          ? 'bg-rose-500/20 border-rose-500/50 text-rose-400'
                           : 'bg-amber-500/20 border-amber-500/50 text-amber-400'
-                      : 'bg-slate-800/60 border-slate-700 text-slate-500 hover:border-slate-600'
-                      }`}
-                  >{r}</button>
+                        : 'bg-slate-800/60 border-slate-700 text-slate-500 hover:border-slate-600'
+                    }`}
+                  >
+                    {r}
+                  </button>
                 ))}
               </div>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Entry Type <span className="text-rose-500">*</span></label>
+              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                Entry Type <span className="text-rose-500">*</span>
+              </label>
               <div className="flex gap-1.5 h-9">
                 {['Long', 'Short'].map((t) => (
                   <button
-                    key={t} type="button"
+                    key={t}
+                    type="button"
                     onClick={() => setForm((f) => ({ ...f, entryType: t }))}
-                    className={`flex-1 rounded-lg text-sm font-semibold border transition-all ${form.entryType === t
-                      ? t === 'Long' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                        : 'bg-rose-500/20 border-rose-500/50 text-rose-400'
-                      : 'bg-slate-800/60 border-slate-700 text-slate-500 hover:border-slate-600'
-                      }`}
+                    className={`flex-1 rounded-lg text-sm font-semibold border transition-all ${
+                      form.entryType === t
+                        ? t === 'Long'
+                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                          : 'bg-rose-500/20 border-rose-500/50 text-rose-400'
+                        : 'bg-slate-800/60 border-slate-700 text-slate-500 hover:border-slate-600'
+                    }`}
                   >
-                    {t === 'Long' ? '↑ Long' : '↓ Short'}
+                    {t === 'Long' ? '▲ Long' : '▼ Short'}
                   </button>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Row 4: Session (read-only), Image URL */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Session (auto-detected)</label>
-              <div className="h-9 px-3 rounded-lg bg-slate-900 border border-slate-800 text-sm flex items-center gap-2">
-                {session ? (
-                  <>
-                    <span className={`w-2 h-2 rounded-full ${session === 'Asian' ? 'bg-violet-400' :
-                      session === 'London' ? 'bg-blue-400' :
-                        session === 'New York' ? 'bg-amber-400' : 'bg-slate-500'
-                      }`} />
-                    <span className={`font-semibold ${SESSION_COLORS[session]}`}>{session}</span>
-                  </>
-                ) : (
-                  <span className="text-slate-600 italic">Enter time above</span>
-                )}
-              </div>
-            </div>
-            <InputField label="Trade Image (URL)" id="imageUrl" type="url" placeholder="https://..." value={form.imageUrl} onChange={set('imageUrl')} />
-          </div>
-
-          {/* Live Chart Image Preview */}
-          {form.imageUrl && (
-            <div className="mb-4 p-2 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-1.5">
-              <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1">
-                <i className="ri-image-line text-emerald-400" /> Chart Preview
-              </span>
-              <div className="h-28 w-full rounded-lg overflow-hidden border border-slate-700/50 bg-black/40">
-                <img
-                  src={form.imageUrl}
-                  alt="Chart preview"
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.parentElement.innerHTML = `<div class="h-full flex items-center justify-center text-xs text-slate-500">Preview link output ready</div>`;
-                  }}
-                />
-              </div>
-            </div>
-          )}
+          {/* Row 4: Image Uploader (Device Upload + URL paste) */}
+          <ImageUploader
+            value={form.imageUrl}
+            onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
+          />
 
           {/* Notes */}
-          <div className="flex flex-col gap-1.5 mb-5">
-            <label htmlFor="notes" className="text-xs font-medium text-slate-400 uppercase tracking-wider">Notes</label>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="notes" className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+              Notes
+            </label>
             <textarea
               id="notes"
               rows={2}
@@ -435,7 +477,7 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3">
+          <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
@@ -455,9 +497,13 @@ const TradeModalForm = ({ isOpen, onClose, onSuccess }) => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Logging Trade...
+                  {isEditMode ? 'Updating Trade...' : 'Logging Trade...'}
                 </span>
-              ) : 'Log Trade 🎯'}
+              ) : isEditMode ? (
+                'Save Changes 🚀'
+              ) : (
+                'Log Trade 🚀'
+              )}
             </button>
           </div>
         </form>

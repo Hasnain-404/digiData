@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useTrades } from '../hooks/useTrades';
 import { useAdmin } from '../context/AdminContext';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
+import TradeModalForm from './TradeModalForm';
 
 const SESSION_CLASS = {
   Asian: 'badge-asian',
@@ -45,9 +46,6 @@ const formatJournalDate = (dateVal) => {
 };
 
 const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
-  const API_BASE = import.meta.env.VITE_BACKEND_URL
-    ? `${import.meta.env.VITE_BACKEND_URL}/api/v1`
-    : 'https://digidata.onrender.com/api/v1';
   const {
     trades, pagination, loading, error,
     page, setPage, filters, setFilters,
@@ -57,6 +55,7 @@ const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
   const { isAdmin } = useAdmin();
 
   const [deletingId, setDeletingId] = useState(null);
+  const [editingTrade, setEditingTrade] = useState(null);
 
   const colHeaders = [
     { key: 'date', label: 'Date' },
@@ -67,20 +66,21 @@ const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
     { key: 'result', label: 'Result' },
     { key: 'profitR', label: 'Profit R' },
     { key: 'riskPercent', label: 'Risk %' },
-    { key: 'Risk $ per position', label: 'Risk $' },
+    { key: 'riskDollar', label: 'Risk $' },
     { key: 'accountBalance', label: 'Balance' },
+    { key: 'imageUrl', label: 'Chart' },
   ];
 
   const handleDeleteTrade = async (trade) => {
     const dateFormatted = formatJournalDate(trade.date);
-    const confirmMsg = `Delete trade ${trade.pair} on ${dateFormatted} at ${trade.time} (${trade.profitR >= 0 ? '+' : ''}${trade.profitR}R ${trade.result})?\n\nThis will remove it from both the website AND your Excel sheet.`;
+    const confirmMsg = `Delete trade ${trade.pair} on ${dateFormatted} at ${trade.time} (${trade.profitR >= 0 ? '+' : ''}${trade.profitR}R ${trade.result})?\n\nThis will remove it from both the website AND your Excel/Google Sheet.`;
     if (!window.confirm(confirmMsg)) return;
 
     setDeletingId(trade._id);
     try {
       const res = await deleteTrade(trade._id);
       if (res.success) {
-        toast.success(`Deleted ${trade.pair} (${dateFormatted} ${trade.time}) from database & Excel.`);
+        toast.success(`Deleted ${trade.pair} (${dateFormatted} ${trade.time}) from database & Sheet.`);
         if (onTradeDeleted) onTradeDeleted();
       } else {
         toast.error(res.message || 'Failed to delete trade');
@@ -182,7 +182,7 @@ const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
                   </td>
                   <td>
                     <span className={`text-xs font-semibold ${trade.entryType === 'Long' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {trade.entryType === 'Long' ? '↑ Long' : '↓ Short'}
+                      {trade.entryType === 'Long' ? '▲ Long' : '▼ Short'}
                     </span>
                   </td>
                   <td>
@@ -196,20 +196,45 @@ const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
                   <td className="text-slate-400">{trade.riskPercent}%</td>
                   <td className="text-amber-400 font-mono-nums">${trade.riskDollar?.toFixed(2)}</td>
                   <td className="text-slate-300 font-mono-nums">${trade.accountBalance?.toLocaleString()}</td>
+                  <td>
+                    {trade.imageUrl ? (
+                      <a
+                        href={trade.imageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 text-xs font-medium transition-all"
+                        title="Open chart in new tab"
+                      >
+                        <i className="ri-image-line text-xs" />
+                        <span>View</span>
+                      </a>
+                    ) : (
+                      <span className="text-slate-600 text-xs">—</span>
+                    )}
+                  </td>
                   {isAdmin && (
                     <td className="text-center">
-                      <button
-                        onClick={() => handleDeleteTrade(trade)}
-                        disabled={deletingId === trade._id}
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all inline-flex items-center justify-center"
-                        title={`Delete ${trade.pair} (${trade.time}) from website & Sheet`}
-                      >
-                        {deletingId === trade._id ? (
-                          <i className="ri-loader-4-line animate-spin text-sm text-rose-400" />
-                        ) : (
-                          <i className="ri-delete-bin-line text-sm" />
-                        )}
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => setEditingTrade(trade)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 border border-transparent hover:border-blue-500/20 transition-all inline-flex items-center justify-center"
+                          title={`Edit ${trade.pair} (${trade.time})`}
+                        >
+                          <i className="ri-edit-line text-sm" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTrade(trade)}
+                          disabled={deletingId === trade._id}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all inline-flex items-center justify-center"
+                          title={`Delete ${trade.pair} (${trade.time}) from website & Sheet`}
+                        >
+                          {deletingId === trade._id ? (
+                            <i className="ri-loader-4-line animate-spin text-sm text-rose-400" />
+                          ) : (
+                            <i className="ri-delete-bin-line text-sm" />
+                          )}
+                        </button>
+                      </div>
                     </td>
                   )}
                 </tr>
@@ -231,7 +256,7 @@ const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
               disabled={page <= 1}
               className="h-7 px-3 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-400 hover:text-white disabled:opacity-30 transition-all"
             >
-              ← Prev
+              ◀ Prev
             </button>
             {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
               const p = i + Math.max(1, Math.min(page - 2, pagination.totalPages - 4));
@@ -253,10 +278,24 @@ const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
               disabled={page >= pagination.totalPages}
               className="h-7 px-3 rounded-lg text-xs bg-slate-800 border border-slate-700 text-slate-400 hover:text-white disabled:opacity-30 transition-all"
             >
-              Next →
+              Next ▶
             </button>
           </div>
         </div>
+      )}
+
+      {/* Edit Trade Modal */}
+      {editingTrade && (
+        <TradeModalForm
+          isOpen={Boolean(editingTrade)}
+          tradeToEdit={editingTrade}
+          onClose={() => setEditingTrade(null)}
+          onSuccess={() => {
+            setEditingTrade(null);
+            refetch();
+            if (onTradeDeleted) onTradeDeleted();
+          }}
+        />
       )}
     </div>
   );

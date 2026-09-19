@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL
@@ -54,6 +54,25 @@ export function useTrades() {
     }
   };
 
+  // Update an existing trade
+  const updateTrade = async (id, tradeData, customHeaders = {}) => {
+    try {
+      setCreating(true);
+      const pin = localStorage.getItem('digidata_owner_pin') || '';
+      const headers = { 'x-admin-pin': pin, ...customHeaders };
+      const res = await axios.put(`${API_BASE}/trades/${id}`, tradeData, { headers });
+      await fetchTrades();
+      return { success: true, data: res.data.data };
+    } catch (err) {
+      return {
+        success: false,
+        message: err.response?.data?.message || 'Failed to update trade',
+      };
+    } finally {
+      setCreating(false);
+    }
+  };
+
   // Delete a trade
   const deleteTrade = async (id, customHeaders = {}) => {
     try {
@@ -80,6 +99,6 @@ export function useTrades() {
     trades, pagination, loading, creating, error,
     page, setPage, filters, setFilters,
     sortBy, order, toggleSort,
-    createTrade, deleteTrade, refetch: fetchTrades,
+    createTrade, updateTrade, deleteTrade, refetch: fetchTrades,
   };
 }
