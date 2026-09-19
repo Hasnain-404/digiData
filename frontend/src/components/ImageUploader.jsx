@@ -1,8 +1,8 @@
 ﻿import React, { useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 
-const UPLOAD_API_KEY = 'uaf_qlKxP4S1USMwIB6t01VvhxQd6QA-1F_X03zEtFQrGm4';
-const UPLOAD_URL = 'https://uploadtourl.com/api/upload';
+const IMGBB_API_KEY = '91f1fed9d7dc996a90e550b0d278db9c';
+const IMGBB_URL = `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`;
 
 const ImageUploader = ({ value, onChange }) => {
   const [activeTab, setActiveTab] = useState('upload'); // 'upload' | 'url'
@@ -19,35 +19,33 @@ const ImageUploader = ({ value, onChange }) => {
       return;
     }
 
-    // Check file size (max 20MB)
-    if (file.size > 20 * 1024 * 1024) {
-      toast.error('Image is too large (max 20MB)');
+    // Check file size (max 32MB as per ImgBB)
+    if (file.size > 32 * 1024 * 1024) {
+      toast.error('Image is too large (max 32MB)');
       return;
     }
 
     try {
       setUploading(true);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('image', file);
 
-      const res = await fetch(UPLOAD_URL, {
+      const res = await fetch(IMGBB_URL, {
         method: 'POST',
-        headers: {
-          'x-api-key': UPLOAD_API_KEY,
-        },
         body: formData,
       });
 
-      const data = await res.json();
-      if (res.ok && data.url) {
-        onChange(data.url);
-        toast.success('Image uploaded successfully! 📸');
+      const json = await res.json();
+      if (res.ok && json.success && json.data) {
+        const directUrl = json.data.url || json.data.display_url;
+        onChange(directUrl);
+        toast.success('Image uploaded permanently (No expiry)! 📸');
       } else {
-        toast.error(data.message || data.error || 'Failed to upload image');
+        toast.error(json.error?.message || 'Failed to upload image');
       }
     } catch (err) {
-      console.error('Image upload failed:', err);
-      toast.error('Network error uploading image');
+      console.error('ImgBB upload error:', err);
+      toast.error('Network error uploading image to ImgBB');
     } finally {
       setUploading(false);
     }
@@ -128,7 +126,7 @@ const ImageUploader = ({ value, onChange }) => {
               <div className="flex flex-col items-center justify-center gap-2 py-3">
                 <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                 <span className="text-xs text-blue-400 font-medium">
-                  Uploading image & generating permanent link...
+                  Uploading image to ImgBB (Permanent lifetime link)...
                 </span>
               </div>
             ) : (
@@ -138,7 +136,7 @@ const ImageUploader = ({ value, onChange }) => {
                   Click to select or drag & drop image here
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  PNG, JPG, WEBP &bull; Auto-converted to shareable link
+                  PNG, JPG, WEBP &bull; Lifetime permanent link via ImgBB (Never expires)
                 </p>
               </div>
             )}
@@ -148,7 +146,7 @@ const ImageUploader = ({ value, onChange }) => {
         <div className="relative">
           <input
             type="url"
-            placeholder="https://i.imgur.com/... or https://cdn..."
+            placeholder="https://i.ibb.co/... or https://i.imgur.com/..."
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
             className="w-full h-9 px-3 rounded-lg bg-slate-800/80 border border-slate-700 text-slate-100 text-sm placeholder-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 outline-none transition-all"
@@ -191,7 +189,7 @@ const ImageUploader = ({ value, onChange }) => {
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               onError={(e) => {
                 e.target.style.display = 'none';
-                e.target.parentElement.innerHTML = `<div class="h-full flex items-center justify-center text-xs text-slate-500">Image loaded & link ready</div>`;
+                e.target.parentElement.innerHTML = `<div class="h-full flex items-center justify-center text-xs text-slate-500">Image loaded & permanent link ready</div>`;
               }}
             />
           </div>
