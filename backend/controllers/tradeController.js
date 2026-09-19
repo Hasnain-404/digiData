@@ -87,7 +87,7 @@ async function syncToGoogleSheet(action, trade) {
     const res = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, trade: tradePayload }),
+      body: JSON.stringify({ action: gasAction, trade: tradePayload }),
     });
 
     const data = await res.json();
@@ -167,6 +167,11 @@ export const createTrade = async (req, res) => {
   try {
     const trade = new Trade(req.body);
     let writerRes = null;
+
+    if (!trade.tradeNumber) {
+      const lastTrade = await Trade.findOne().sort({ tradeNumber: -1 });
+      trade.tradeNumber = (lastTrade && lastTrade.tradeNumber) ? lastTrade.tradeNumber + 1 : 1;
+    }
 
     // ── Write back to Google Sheet / Excel automatically ────────────────────
     try {

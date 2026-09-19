@@ -189,7 +189,7 @@ function doPost(e) {
     // Find header row (defaults to 3)
     var headerRow = findHeaderRow(sheet);
 
-    if (action === 'create' || action === 'add') {
+    if (action === 'create' || action === 'add' || action === 'append') {
       var newTradeNum = findNextTradeNumber(sheet, headerRow);
       var targetRow   = findNextAvailableRow(sheet, headerRow);
 
@@ -273,6 +273,12 @@ function doPost(e) {
       }
       if (trade.imageUrl !== undefined) {
         sheet.getRange(row, COL.IMAGE_URL).setValue(String(trade.imageUrl).trim());
+      }
+      if (trade.riskDollar !== undefined && trade.riskDollar !== null && trade.riskDollar !== '') {
+        sheet.getRange(row, COL.RISK_DOLLAR).setValue(parseFloat(trade.riskDollar));
+      }
+      if (trade.accountBalance !== undefined && trade.accountBalance !== null && trade.accountBalance !== '') {
+        sheet.getRange(row, COL.ACCOUNT_BAL).setValue(parseFloat(trade.accountBalance));
       }
 
       SpreadsheetApp.flush();
