@@ -68,6 +68,7 @@ async function syncToGoogleSheet(action, trade) {
   if (!webhookUrl) return null;
 
   try {
+    const gasAction = action === 'append' ? 'create' : action;
     const tradePayload = {
       tradeNumber: trade.tradeNumber,
       pair: trade.pair,
