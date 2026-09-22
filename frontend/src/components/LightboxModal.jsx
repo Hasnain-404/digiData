@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { getSafeImageUrl, getProxiedImageUrl } from '../utils/imageUrl';
 
 const LightboxModal = ({ imageUrl, onClose }) => {
   // Disable background scrolling & close on ESC
@@ -16,6 +17,8 @@ const LightboxModal = ({ imageUrl, onClose }) => {
 
   if (!imageUrl) return null;
 
+  const safeUrl = getSafeImageUrl(imageUrl);
+
   return (
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in cursor-pointer select-none"
@@ -27,7 +30,7 @@ const LightboxModal = ({ imageUrl, onClose }) => {
         onClick={(e) => e.stopPropagation()}
       >
         <a
-          href={imageUrl}
+          href={safeUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-200 transition-all shadow-xl"
@@ -50,9 +53,15 @@ const LightboxModal = ({ imageUrl, onClose }) => {
         onClick={(e) => e.stopPropagation()}
       >
         <img
-          src={imageUrl}
+          src={safeUrl}
           alt="Trade Chart Setup"
           className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-slate-800/80 bg-slate-950"
+          onError={(e) => {
+            const proxied = getProxiedImageUrl(imageUrl);
+            if (e.target.src !== proxied) {
+              e.target.src = proxied;
+            }
+          }}
         />
       </div>
 

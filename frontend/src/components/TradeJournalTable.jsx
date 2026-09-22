@@ -1,9 +1,10 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useTrades } from '../hooks/useTrades';
 import { useAdmin } from '../context/AdminContext';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import TradeModalForm from './TradeModalForm';
+import { getSafeImageUrl } from '../utils/imageUrl';
 
 const SESSION_CLASS = {
   Asian: 'badge-asian',
@@ -199,7 +200,7 @@ const TradeJournalTable = ({ refreshTrigger, onTradeDeleted }) => {
                   <td>
                     {trade.imageUrl ? (
                       <a
-                        href={trade.imageUrl}
+                        href={getSafeImageUrl(trade.imageUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 text-xs font-medium transition-all"

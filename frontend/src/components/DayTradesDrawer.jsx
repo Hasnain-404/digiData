@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import LightboxModal from './LightboxModal';
+import { getSafeImageUrl, getProxiedImageUrl } from '../utils/imageUrl';
 
 const sessionClass = {
   Asian: 'badge-asian',
@@ -132,44 +133,55 @@ const DayTradesDrawer = ({ dateKey, dayData, onClose }) => {
                 </div>
 
                 {/* Trade Chart Image Card */}
-                {trade.imageUrl ? (
-                  <div className="mt-1 rounded-xl overflow-hidden border border-slate-700/60 bg-slate-900 group relative">
-                    <div className="relative h-40 w-full overflow-hidden cursor-pointer" onClick={() => setActiveLightboxImage(trade.imageUrl)}>
-                      <img
-                        src={trade.imageUrl}
-                        alt={`${trade.pair} trade setup chart`}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-90 group-hover:opacity-100"
-                        onError={(e) => {
-                          e.target.parentElement.innerHTML = `
-                            <div class="h-full w-full flex items-center justify-center p-3 text-xs text-slate-400 bg-slate-900/90 text-center">
-                              <span class="flex items-center gap-1.5"><i class="ri-link text-blue-400"></i> Chart Link Attached</span>
-                            </div>
-                          `;
-                        }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">
-                        <span className="text-xs text-white font-medium flex items-center gap-1">
-                          <i className="ri-zoom-in-line text-blue-400" /> Click to enlarge
+                {trade.imageUrl ? (() => {
+                  const safeImgUrl = getSafeImageUrl(trade.imageUrl);
+                  return (
+                    <div className="mt-1 rounded-xl overflow-hidden border border-slate-700/60 bg-slate-900 group relative">
+                      <div
+                        className="relative h-40 w-full overflow-hidden cursor-pointer"
+                        onClick={() => setActiveLightboxImage(safeImgUrl)}
+                      >
+                        <img
+                          src={safeImgUrl}
+                          alt={`${trade.pair} trade setup chart`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-90 group-hover:opacity-100"
+                          onError={(e) => {
+                            const proxied = getProxiedImageUrl(trade.imageUrl);
+                            if (e.target.src !== proxied) {
+                              e.target.src = proxied;
+                            } else {
+                              e.target.parentElement.innerHTML = `
+                                <div class="h-full w-full flex items-center justify-center p-3 text-xs text-slate-400 bg-slate-900/90 text-center">
+                                  <span class="flex items-center gap-1.5"><i class="ri-link text-blue-400"></i> Chart Link Attached</span>
+                                </div>
+                              `;
+                            }
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">
+                          <span className="text-xs text-white font-medium flex items-center gap-1">
+                            <i className="ri-zoom-in-line text-blue-400" /> Click to enlarge
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-2 bg-slate-900/90 flex items-center justify-between border-t border-slate-800 text-xs">
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <i className="ri-image-line text-emerald-400" /> Trade Setup Chart
                         </span>
+                        <a
+                          href={safeImgUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          View Full Link <i className="ri-external-link-line" />
+                        </a>
                       </div>
                     </div>
-
-                    <div className="p-2 bg-slate-900/90 flex items-center justify-between border-t border-slate-800 text-xs">
-                      <span className="text-slate-400 flex items-center gap-1">
-                        <i className="ri-image-line text-emerald-400" /> Trade Setup Chart
-                      </span>
-                      <a
-                        href={trade.imageUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 flex items-center gap-1 font-medium transition-colors"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        View Full Link <i className="ri-external-link-line" />
-                      </a>
-                    </div>
-                  </div>
-                ) : (
+                  );
+                })() : (
                   <div className="mt-1 p-2.5 rounded-lg border border-dashed border-slate-800 text-center text-xs text-slate-600">
                     No chart image attached for this trade
                   </div>

@@ -1,5 +1,6 @@
-﻿import React, { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import toast from 'react-hot-toast';
+import { getSafeImageUrl, getProxiedImageUrl } from '../utils/imageUrl';
 
 const IMGBB_API_KEY = '91f1fed9d7dc996a90e550b0d278db9c';
 const IMGBB_URL = `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`;
@@ -155,46 +156,54 @@ const ImageUploader = ({ value, onChange }) => {
       )}
 
       {/* Preview Section */}
-      {value && (
-        <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-2 animate-fade-in">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-[11px] font-medium text-emerald-400 flex items-center gap-1 truncate max-w-[280px]">
-              <i className="ri-checkbox-circle-fill text-emerald-400" />
-              <span className="truncate">{value}</span>
-            </span>
-            <div className="flex items-center gap-1.5">
-              <a
-                href={value}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[11px] text-slate-400 hover:text-blue-400 underline flex items-center gap-0.5"
-                title="Open image in new tab"
-              >
-                <i className="ri-external-link-line" /> Open
-              </a>
-              <button
-                type="button"
-                onClick={() => onChange('')}
-                className="text-[11px] text-rose-400 hover:text-rose-300 p-0.5 rounded hover:bg-rose-500/10 transition-colors"
-                title="Remove image"
-              >
-                <i className="ri-delete-bin-line" /> Remove
-              </button>
+      {value && (() => {
+        const previewUrl = getSafeImageUrl(value);
+        return (
+          <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-2 animate-fade-in">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[11px] font-medium text-emerald-400 flex items-center gap-1 truncate max-w-[280px]">
+                <i className="ri-checkbox-circle-fill text-emerald-400" />
+                <span className="truncate">{value}</span>
+              </span>
+              <div className="flex items-center gap-1.5">
+                <a
+                  href={previewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] text-slate-400 hover:text-blue-400 underline flex items-center gap-0.5"
+                  title="Open image in new tab"
+                >
+                  <i className="ri-external-link-line" /> Open
+                </a>
+                <button
+                  type="button"
+                  onClick={() => onChange('')}
+                  className="text-[11px] text-rose-400 hover:text-rose-300 p-0.5 rounded hover:bg-rose-500/10 transition-colors"
+                  title="Remove image"
+                >
+                  <i className="ri-delete-bin-line" /> Remove
+                </button>
+              </div>
+            </div>
+            <div className="h-28 w-full rounded-lg overflow-hidden border border-slate-800 bg-black/40 relative group">
+              <img
+                src={previewUrl}
+                alt="Trade chart preview"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                onError={(e) => {
+                  const proxied = getProxiedImageUrl(value);
+                  if (e.target.src !== proxied) {
+                    e.target.src = proxied;
+                  } else {
+                    e.target.style.display = 'none';
+                    e.target.parentElement.innerHTML = `<div class="h-full flex items-center justify-center text-xs text-slate-500">Image loaded & permanent link ready</div>`;
+                  }
+                }}
+              />
             </div>
           </div>
-          <div className="h-28 w-full rounded-lg overflow-hidden border border-slate-800 bg-black/40 relative group">
-            <img
-              src={value}
-              alt="Trade chart preview"
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                e.target.parentElement.innerHTML = `<div class="h-full flex items-center justify-center text-xs text-slate-500">Image loaded & permanent link ready</div>`;
-              }}
-            />
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

@@ -14,12 +14,14 @@ import {
   autoSyncFromSheet,
   requireAdminPin,
   verifyAdminPin,
+  proxyTradeImage,
 } from '../controllers/tradeController.js';
 
 const router = Router();
 
 // ── Public Routes (Anyone can view & learn) ──────────────────────────────────
 router.get('/stream',             sseStream);           // SSE: real-time trade update events
+router.get('/image-proxy',        proxyTradeImage);     // Proxy trade images (bypass ISP DNS blocks)
 router.get('/',                   getTrades);           // View all trades
 router.get('/export',             exportTradesToExcel); // Download trades as .xlsx
 router.get('/:id',                getTradeById);        // View single trade details

@@ -767,3 +767,52 @@ export const autoSyncFromSheet = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// ─── Image Proxy (bypasses mobile ISP DNS blocking for external image hosts) ───
+export const proxyTradeImage = async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url) {
+      return res.status(400).json({ success: false, message: 'URL query parameter is required' });
+    }
+
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return res.status(400).json({ success: false, message: 'Invalid URL' });
+    }
+
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return res.status(400).json({ success: false, message: 'Invalid protocol' });
+    }
+
+    const upstreamRes = await fetch(url, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      },
+    });
+
+    if (!upstreamRes.ok) {
+      return res.status(upstreamRes.status).json({
+        success: false,
+        message: `Failed to fetch image from upstream: ${upstreamRes.statusText}`,
+      });
+    }
+
+    const contentType = upstreamRes.headers.get('content-type') || 'image/jpeg';
+    res.setHeader('Content-Type', contentType);
+    // Cache for 7 days in browser and CDN (immutable)
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+
+    const arrayBuffer = await upstreamRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    return res.send(buffer);
+  } catch (err) {
+    console.error('❌ Image proxy error:', err.message);
+    return res.status(500).json({ success: false, message: 'Error proxying image' });
+  }
+};
+
