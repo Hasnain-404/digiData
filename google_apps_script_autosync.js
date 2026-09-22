@@ -202,8 +202,16 @@ function doPost(e) {
       var tStr = formatTimeStr(trade.time || '12:00');
       var prevRow = targetRow - 1;
 
-      // Col A: #
-      sheet.getRange(targetRow, COL.TRADE_NUMBER).setValue(newTradeNum);
+      // Col A: # (Preserve user formula if present; otherwise set upper cell + 1 formula)
+      var cellTradeNum = sheet.getRange(targetRow, COL.TRADE_NUMBER);
+      var existingFormulaA = cellTradeNum.getFormula();
+      if (!existingFormulaA) {
+        if (prevRow <= headerRow) {
+          cellTradeNum.setFormula('=IF(B' + targetRow + '="","",1)');
+        } else {
+          cellTradeNum.setFormula('=IF(B' + targetRow + '="","",A' + prevRow + '+1)');
+        }
+      }
       // Col B: PAIR
       sheet.getRange(targetRow, COL.PAIR).setValue(String(trade.pair || '').toUpperCase());
       // Col C: Time
@@ -240,7 +248,13 @@ function doPost(e) {
       sheet.getRange(targetRow, COL.DAY).setFormula('=IF(D' + targetRow + '="","",TEXT(D' + targetRow + ',"dddd"))');
 
       SpreadsheetApp.flush();
-      return jsonResponse({ success: true, action: 'create', tradeNumber: newTradeNum, row: targetRow });
+      var calculatedTradeNum = parseInt(sheet.getRange(targetRow, COL.TRADE_NUMBER).getValue(), 10);
+      if (isNaN(calculatedTradeNum) || calculatedTradeNum <= 0) {
+        var prevVal = parseInt(sheet.getRange(prevRow, COL.TRADE_NUMBER).getValue(), 10);
+        calculatedTradeNum = (!isNaN(prevVal) && prevVal > 0) ? (prevVal + 1) : (prevRow - headerRow + 1);
+      }
+
+      return jsonResponse({ success: true, action: 'create', tradeNumber: calculatedTradeNum, row: targetRow });
     }
 
     if (action === 'update' || action === 'edit') {
@@ -395,10 +409,13 @@ function findNextTradeNumber(sheet, headerRow) {
   var lastRow = sheet.getLastRow();
   var maxNum = 0;
   if (lastRow > headerRow) {
+    var pairs = sheet.getRange(headerRow + 1, COL.PAIR, lastRow - headerRow, 1).getValues();
     var colA = sheet.getRange(headerRow + 1, COL.TRADE_NUMBER, lastRow - headerRow, 1).getValues();
     for (var i = 0; i < colA.length; i++) {
-      var n = parseInt(colA[i][0], 10);
-      if (!isNaN(n) && n > maxNum) maxNum = n;
+      if (String(pairs[i][0] || '').trim()) {
+        var n = parseInt(colA[i][0], 10);
+        if (!isNaN(n) && n > maxNum) maxNum = n;
+      }
     }
   }
   return maxNum + 1;

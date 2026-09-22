@@ -169,12 +169,8 @@ export const createTrade = async (req, res) => {
     const trade = new Trade(req.body);
     let writerRes = null;
 
-    if (!trade.tradeNumber) {
-      const lastTrade = await Trade.findOne().sort({ tradeNumber: -1 });
-      trade.tradeNumber = (lastTrade && lastTrade.tradeNumber) ? lastTrade.tradeNumber + 1 : 1;
-    }
-
     // ── Write back to Google Sheet / Excel automatically ────────────────────
+    // Google Sheet computes trade # using formula (upper cell + 1)
     try {
       writerRes = await syncTradeToSheet('append', trade);
       if (writerRes && writerRes.tradeNumber) {
@@ -182,6 +178,12 @@ export const createTrade = async (req, res) => {
       }
     } catch (xlsxErr) {
       console.warn('⚠️ Could not write to sheet:', xlsxErr.message);
+    }
+
+    // Fallback only if sheet did not assign a tradeNumber
+    if (!trade.tradeNumber) {
+      const lastTrade = await Trade.findOne().sort({ tradeNumber: -1 });
+      trade.tradeNumber = (lastTrade && lastTrade.tradeNumber) ? lastTrade.tradeNumber + 1 : 1;
     }
 
     await trade.save(); // pre-save hooks fire here
