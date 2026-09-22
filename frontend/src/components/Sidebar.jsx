@@ -1,14 +1,15 @@
 import React from 'react';
+import { useAdmin } from '../context/AdminContext';
 
 const Sidebar = ({ activeTab, setActiveTab }) => {
+  const { isAdmin, lock } = useAdmin();
+
   const mainNav = [
     { id: 'dashboard', label: 'Dashboard', icon: 'ri-dashboard-line' },
     { id: 'analytics', label: 'Analytics', icon: 'ri-bar-chart-2-line' },
     { id: 'reports', label: 'Reports', icon: 'ri-file-chart-line' },
     { id: 'trades', label: 'Trades', icon: 'ri-file-list-3-line' },
-    { id: 'backtest', label: 'Backtest', icon: 'ri-shape-2-line' },
     { id: 'notebook', label: 'Notebook', icon: 'ri-book-2-line' },
-    { id: 'community', label: 'Community', icon: 'ri-team-line' },
   ];
 
   return (
@@ -52,7 +53,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
 
       {/* Bottom Footer Actions */}
       <div className="space-y-4 pt-4 border-t border-slate-800/60">
-        {/* Settings & Logout */}
+        {/* Settings & Conditional Logout */}
         <div className="space-y-1">
           <button
             onClick={() => setActiveTab('settings')}
@@ -64,10 +65,18 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
             <i className="ri-settings-3-line text-slate-500 text-base" />
             <span>Settings</span>
           </button>
-          <button className="w-full flex items-center gap-3 px-3.5 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-all">
-            <i className="ri-logout-box-r-line text-slate-500 text-base" />
-            <span>Logout</span>
-          </button>
+
+          {/* Only shown to Admin; completely hidden for Visitors */}
+          {isAdmin && (
+            <button
+              onClick={lock}
+              className="w-full flex items-center gap-3 px-3.5 py-2 rounded-lg text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-all cursor-pointer"
+              title="Logout (Switch to Visitor mode)"
+            >
+              <i className="ri-logout-box-r-line text-rose-400 text-base" />
+              <span>Logout</span>
+            </button>
+          )}
         </div>
       </div>
     </aside>

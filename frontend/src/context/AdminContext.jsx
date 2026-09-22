@@ -92,7 +92,7 @@ export const AdminProvider = ({ children }) => {
     localStorage.removeItem(STORAGE_KEY);
     setAdminPin('');
     setIsAdmin(false);
-    toast('Switched to Public View Mode (Read-Only) 🔒');
+    toast('Logged out — Switched to Visitor Mode 🔒');
   }, []);
 
   const getAuthHeaders = useCallback(() => {

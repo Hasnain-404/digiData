@@ -12,7 +12,6 @@ import TradeJournalTable from './components/TradeJournalTable';
 import TradeModalForm from './components/TradeModalForm';
 import ExcelImportModal from './components/ExcelImportModal';
 import NotebookView from './components/NotebookView';
-import BacktestView from './components/BacktestView';
 import DayBreakdownTable from './components/DayBreakdownTable';
 import { AdminProvider } from './context/AdminContext';
 import AdminPinModal from './components/AdminPinModal';
@@ -186,20 +185,8 @@ const AppContent = () => {
             </section>
           )}
 
-          {/* ── BACKTEST VIEW ─────────────────────────────────────────────── */}
-          {activeTab === 'backtest' && <BacktestView />}
-
-          {/* ── COMMUNITY VIEW ────────────────────────────────────────────── */}
-          {activeTab === 'community' && (
-            <section className="space-y-6">
-              <SectionHeader title="Community & Trader Hub" subtitle="Share setups & learn from top traders" icon="ri-team-line" />
-              <div className="p-8 rounded-2xl bg-[#0e131f] border border-slate-800 text-center space-y-3">
-                <i className="ri-team-fill text-4xl text-cyan-400" />
-                <h3 className="text-lg font-bold text-white">DigiData Community</h3>
-                <p className="text-xs text-slate-400 max-w-md mx-auto">Connect with fellow backtesters, share strategy rules, trade logs, and review weekly setup confluence.</p>
-              </div>
-            </section>
-          )}
+          {/* ── NOTEBOOK VIEW ─────────────────────────────────────────────── */}
+          {activeTab === 'notebook' && <NotebookView />}
 
           {/* ── SETTINGS VIEW ─────────────────────────────────────────────── */}
           {activeTab === 'settings' && (

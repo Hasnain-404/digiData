@@ -17,9 +17,7 @@ const Navbar = ({ activeTab, onNewJournal, onImportExcel, onSyncGoogleSheet, isS
     analytics: 'Analytics Overview',
     reports: 'Performance Reports',
     trades: 'Trade Log & Journal',
-    backtest: 'Backtest Models',
     notebook: 'Notebook',
-    community: 'Community Hub',
     settings: 'Settings & Preferences',
   };
 
@@ -35,26 +33,26 @@ const Navbar = ({ activeTab, onNewJournal, onImportExcel, onSyncGoogleSheet, isS
 
         {/* Right side actions */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-          {/* Owner Mode Toggle Button */}
+          {/* Admin Logout / Visitor Mode Toggle Button */}
           {isAdmin ? (
             <button
               id="btn-owner-mode"
               onClick={lock}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-semibold transition-all duration-200 active:scale-95 shadow-sm"
-              title="Owner Mode Active — Click to switch to Read-Only Public Mode"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-all duration-200 active:scale-95 shadow-sm cursor-pointer"
+              title="Admin Active — Click to Logout to Visitor Mode"
             >
-              <i className="ri-lock-unlock-line text-sm text-emerald-400" />
-              <span className="hidden sm:inline">Owner Mode</span>
+              <i className="ri-logout-box-r-line text-sm text-rose-400" />
+              <span className="hidden sm:inline">Logout</span>
             </button>
           ) : (
             <button
               id="btn-public-mode"
               onClick={() => openPinModal()}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-400 hover:text-slate-200 text-xs font-semibold transition-all duration-200 active:scale-95"
-              title="Public View Mode (Read-Only) — Click to enter Owner PIN"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-400 hover:text-slate-200 text-xs font-semibold transition-all duration-200 active:scale-95 cursor-pointer"
+              title="Visitor Mode (Read-Only) — Click to enter Admin PIN"
             >
               <i className="ri-lock-line text-sm text-slate-400" />
-              <span className="hidden sm:inline">View Only</span>
+              <span className="hidden sm:inline">Visitor</span>
             </button>
           )}
 
