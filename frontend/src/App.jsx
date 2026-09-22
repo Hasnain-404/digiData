@@ -138,9 +138,6 @@ const AppContent = () => {
             </>
           )}
 
-          {/* ── NOTEBOOK VIEW ─────────────────────────────────────────────── */}
-          {activeTab === 'notebook' && <NotebookView />}
-
           {/* ── ANALYTICS VIEW ────────────────────────────────────────────── */}
           {activeTab === 'analytics' && (
             <>
